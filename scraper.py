@@ -7,7 +7,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 SITIO_ANIME = "https://animefenix.tv/"
 
-anime = "goul"
+anime = "one piece"
 
 anime_busqueda = anime.replace(" ", "+")
 
@@ -17,6 +17,7 @@ patron = r"title=\".*\""
 
 lista_resultado_busqueda = re.findall(patron, str(sitio_busqueda))
 lista_sin_repetidos = list(set(lista_resultado_busqueda))
+lista_sin_repetidos.sort()
 
 if lista_sin_repetidos.__len__() > 0:
 
