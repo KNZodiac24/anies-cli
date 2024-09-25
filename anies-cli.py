@@ -31,7 +31,7 @@ if sys.argv.__len__() == 1:
 
 
 
-VERSION_SCRIPT = "0.0.1"
+VERSION_SCRIPT = "0.5.0"
 REPRODUCTOR = "mpv"
 EPISODIO = None
 DESCARGAR = False
@@ -114,27 +114,45 @@ else:
 
 sitio_anime_seleccionado = requests.get(list(LISTA_ANIMES.values())[SELECCION_ANIME-1]).text
 patron_busqueda_episodios = r"is-rounded\s\"\shref=\".*[0-9]+\"\>"
-temp = re.search(patron_busqueda_episodios, str(sitio_anime_seleccionado))
-ultimo_episodio = temp.group()
+ultimo_episodio = re.search(patron_busqueda_episodios, str(sitio_anime_seleccionado)).group()
+link_general_episodios = ultimo_episodio
 
 ultimo_episodio = re.search(r"\-[0-9]+\"\>", ultimo_episodio).group()
 ultimo_episodio = ultimo_episodio.removeprefix("-")
 num_episodios_anime = ultimo_episodio.removesuffix('">')
 
+def generar_link_episodio(link_sin_limpiar, num_episodio):
+    link_sin_limpiar = link_sin_limpiar.removeprefix('is-rounded " href="')
+    link_limpio = link_sin_limpiar.removesuffix('">')
+    
+    link_episodio_seleccionado = link_limpio.replace("-"+num_episodios_anime, "-"+num_episodio)
+
+    return link_episodio_seleccionado
+
+def obtener_link_video(link_episodio):
+    # TODO: Arreglar filtrado de video
+    patron_busqueda_video = r"\<video\sclass=\"jw-video\sjw-reset\".*src=\".*\"\>\</video\>"
+    
+    sitio_episodio_seleccionado = requests.get(link_episodio).text
+    link_video_sin_limpiar = re.search(patron_busqueda_video, str(sitio_episodio_seleccionado))
+
+    print(link_video_sin_limpiar)
 
 # TODO: Verificar casos (Ep indicado & Descargar), (Ep NO indicado & Descargar), (Ep indicado & NO Descargar), (Ep NO indicado & NO Descargar)
 
-if EPISODIO is not None and DESCARGAR is False:
-    print("ya se ha seleccionado un episodio: ",EPISODIO) 
-else:
+if EPISODIO is None and DESCARGAR is False:
+    SELECCION_EPISODIO = input(f"\n{list(LISTA_ANIMES.keys())[SELECCION_ANIME-1]} tiene {num_episodios_anime} episodio(s). Selecciona el número de episodio a reproducir: ")
+    if not SELECCION_EPISODIO.isdecimal():
+        print("Por favor, ingresa un número válido.")
+        exit(0)
+    elif int(SELECCION_EPISODIO) > int(num_episodios_anime) or int(SELECCION_EPISODIO) < 1:
+        print("Por favor, selecciona un número de episodio dentro del rango válido.")
+        exit(0)
+    else:
+       obtener_link_video(generar_link_episodio(link_general_episodios, SELECCION_EPISODIO)) 
 
-    SELECCION_EPISODIO= input(f"\n{list(LISTA_ANIMES.keys())[SELECCION_ANIME-1]} tiene {num_episodios_anime} episodio(s). Selecciona el número de episodio a reproducir: ")
-
-    print(SELECCION_EPISODIO)
-
-
-
-
+elif EPISODIO is not None and DESCARGAR is False:
+    print("xd")
 
 
 
