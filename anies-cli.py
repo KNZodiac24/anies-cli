@@ -2,6 +2,7 @@ import re
 import requests
 import sys
 import io
+import subprocess
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -31,7 +32,7 @@ if sys.argv.__len__() == 1:
 
 
 
-VERSION_SCRIPT = "0.5.0"
+VERSION_SCRIPT = "0.7.0"
 REPRODUCTOR = "mpv"
 EPISODIO = None
 DESCARGAR = False
@@ -130,13 +131,37 @@ def generar_link_episodio(link_sin_limpiar, num_episodio):
     return link_episodio_seleccionado
 
 def obtener_link_video(link_episodio):
-    # TODO: Arreglar filtrado de video
-    patron_busqueda_video = r"\<video\sclass=\"jw-video\sjw-reset\".*src=\".*\"\>\</video\>"
+    
+    patron_busqueda_1 = r"tabsArray\[\'1\'\]\s=.*src=\'.*thumbnail"
     
     sitio_episodio_seleccionado = requests.get(link_episodio).text
-    link_video_sin_limpiar = re.search(patron_busqueda_video, str(sitio_episodio_seleccionado))
+    link_busqueda_1 = re.search(patron_busqueda_1, str(sitio_episodio_seleccionado)).group()
+    link_busqueda_1 = re.sub(r".*src=\'", "", link_busqueda_1)
+    link_busqueda_1 = link_busqueda_1.removesuffix("&amp;thumbnail")
+    link_busqueda_1 = link_busqueda_1.replace("&amp;", "&")
 
-    print(link_video_sin_limpiar)
+    print(link_busqueda_1)
+    patron_busqueda_2 = r"height=\"100%\"\ssrc=\".*\"\sf"
+
+    sitio_player = requests.get(link_busqueda_1).text
+    link_busqueda_2 = re.search(patron_busqueda_2, str(sitio_player)).group()
+    link_busqueda_2 = re.sub(r".*src=\"", "", link_busqueda_2)
+    link_busqueda_2 = link_busqueda_2.removesuffix('" f')
+    link_busqueda_2 = link_busqueda_2.replace("../", SITIO_ANIME)
+
+    print(link_busqueda_2)
+
+    patron_busqueda_video = r"\"file\":\".*\",\"t"
+
+    sitio_video = requests.get(link_busqueda_2).text
+    link_video = re.search(patron_busqueda_video, str(sitio_video)).group()
+    link_video = re.sub(r".*:\"", "", link_video)
+    link_video = link_video.removesuffix('","t')
+    link_video = re.sub(r"\\", "", link_video)
+
+    print(link_video)
+
+    return link_video
 
 # TODO: Verificar casos (Ep indicado & Descargar), (Ep NO indicado & Descargar), (Ep indicado & NO Descargar), (Ep NO indicado & NO Descargar)
 
@@ -149,7 +174,7 @@ if EPISODIO is None and DESCARGAR is False:
         print("Por favor, selecciona un número de episodio dentro del rango válido.")
         exit(0)
     else:
-       obtener_link_video(generar_link_episodio(link_general_episodios, SELECCION_EPISODIO)) 
+       subprocess.run(["PowerShell", REPRODUCTOR, obtener_link_video(generar_link_episodio(link_general_episodios, SELECCION_EPISODIO))], shell=True) 
 
 elif EPISODIO is not None and DESCARGAR is False:
     print("xd")
