@@ -16,10 +16,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <fstream>
+//#include <fstream>
 #include <iostream>
 #include <regex>
-// #include <sstream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -131,7 +131,7 @@ bool verificar_argumento_episodio(const std::string& arg_episodio) {
 }
 
 std::string consultar_sitio(const std::string& sitio) {
-    /*std::ostringstream os {};
+    std::ostringstream os {};
     curlpp::options::WriteStream ws{&os};
 
     try {
@@ -148,8 +148,8 @@ std::string consultar_sitio(const std::string& sitio) {
 		std::cout << e.what() << '\n';
 	}
 
-    return os.str();*/
-
+    return os.str();
+/*
     std::string salida {};
 
     std::ifstream inf{ "text.txt" };
@@ -165,7 +165,7 @@ std::string consultar_sitio(const std::string& sitio) {
         salida += linea + '\n';
     }
 
-    return salida;
+    return salida;*/
 }
 
 std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
@@ -204,7 +204,7 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
             std::string titulo { r.substr(0, r.find('%')) };
             std::string link { r.substr(r.find('%')+1, r.size()-1) };
 
-            // Este bloque es para solo añadir una verificacón de que lo ingresado por el usuario salga en la búsqueda,
+            // Este bloque es solo para añadir una verificación de que lo ingresado por el usuario salga en la búsqueda,
             // ya que por alguna razón animeav1 suele mostrar resultados que no tienen que ver
             std::string temp_titulo { titulo };
             std::transform(
@@ -224,13 +224,15 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
         return titulos_con_links;
     }; 
 
-    auto temp { extraer_titulo_y_link(respuesta_sitio) };
-
-/*
     for (int i { 1 }; i <= numero_ultima_pagina; ++i) {
-        
+        if (i == 1) animes_encontrados.merge(extraer_titulo_y_link(respuesta_sitio));
+        else {
+            animes_encontrados.merge(
+                extraer_titulo_y_link(consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME+"&page="+std::to_string(i)))
+            );
+        }
     }
-*/
+
     return animes_encontrados;
 }
 
