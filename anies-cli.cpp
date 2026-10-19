@@ -16,10 +16,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//#include <fstream>
+#include <fstream>
 #include <iostream>
 #include <regex>
-#include <sstream>
+// #include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -48,15 +48,27 @@ void mostrar_ayuda() {
         anies-cli jujutsu kaisen -e 9)" << '\n';
 }
 
-bool verificar_argumento_episodio(const std::string& arg_episodio);
+// De: https://stackoverflow.com/questions/46479513/trim-matching-characters-from-start-or-end-of-string-c
+void trim(std::string& s, char c, bool reverse = false ) {
+    if (reverse) s.erase( s.find_last_not_of( c ) + 1 );
+    else s.erase( 0, s.find_first_not_of( c ) );
+}
+
+bool verificar_argumento_numerico(const std::string& arg);
+
+void validar_titulo_anime();
 
 std::string consultar_sitio(const std::string& sitio);
 
 std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
+std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados);
+
+void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado);
+
 //////// Main ////////
 
-constexpr std::string_view VERSION_PROGRAMA { "0.2.0" };
+constexpr std::string_view VERSION_PROGRAMA { "0.5.3" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string_view REPRODUCTOR { "mpv" };
 constinit std::string ANIME {};
@@ -87,51 +99,96 @@ int main(int argc, char *argv[]) {
             continue;
         }
         else if (op == "-e") {
-            if (static_cast<int>(i+1) < argc && verificar_argumento_episodio(argumentos[i+1])) { 
+            if (static_cast<int>(i+1) < argc && verificar_argumento_numerico(argumentos[i+1])) { 
                 EPISODIO = std::stoi(argumentos[i+1]);
                 argumentos.erase(std::remove(argumentos.begin(), argumentos.end(), argumentos[i+1]), argumentos.cend());
                 continue;
             } else {
-                std::cout << "Por favor, especifica el número de episodio correctamente.";
+                std::cerr << "Por favor, especifica el número de episodio correctamente.\n";
                 mostrar_ayuda();
                 exit(EXIT_FAILURE);
             }
         }
         else {
-            ANIME += op + '+';
+            if (op.contains("+")) {
+                ANIME += std::regex_replace(op, std::regex{"\\+"}, "%2B") + '+';
+            } else if (op.contains(' ')) {
+                ANIME += std::regex_replace(op, std::regex{" "}, "+");
+            } else {
+                ANIME += op + '+';
+            }
         }
     }
 
-    const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
+    validar_titulo_anime();
+
+    // const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
+    const std::string respuesta_sitio { consultar_sitio("text_consulta.txt") };
 
     const std::unordered_map<std::string, std::string> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
+    const std::string titulo_seleccionado { seleccionar_titulo(animes_encontrados) };
+
+    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.at(titulo_seleccionado) };
+
+    // const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
+    const std::string respuesta_titulo_seleccionado { consultar_sitio("text_anime.txt") };
+
+    seleccionar_episodio(titulo_seleccionado, respuesta_titulo_seleccionado);
+ 
     return 0;
 }
 
 /////// Definiciones ///////
 
-bool verificar_argumento_episodio(const std::string& arg_episodio) {
+bool verificar_argumento_numerico(const std::string& arg) {
     try {
-        int num_temp { std::stoi(arg_episodio) };
-        
-        if(num_temp > 0) return true;
+        constexpr auto match_valor_numerico { ctre::match<"[0-9]+"> };
+        if (!match_valor_numerico(arg)) {
+            std::cerr << "Error: El valor ingresado no es válido.\n";
+            return false;
+        }
 
-        std::cout << "\nEl número de episodio es menor al mínimo permitido.\n";
+        int num_temp { std::stoi(arg) };
+        
+        if (num_temp > 0) return true;
+
+        std::cerr << "Error: El número ingresado es menor al mínimo permitido.\n";
 
         return false;
 
     } catch(std::invalid_argument const& ex) {
-        std::cout << "\nEl argumento de episodio ingresado no es válido.\n";
+        std::cerr << "Error: El valor ingresado no es válido.\n";
     } catch(std::out_of_range const& ex) {
-        std::cout << "\nEl número de episodio ingresado es mayor al máximo permitido.\n";
+        std::cerr << "Error: El número ingresado es mayor al máximo permitido.\n";
     }
 
     return false;
 }
 
+void validar_titulo_anime() {
+    trim(ANIME, '+', true);
+
+    constexpr auto matcher_espacios { ctre::match<"^[\\h\\s\v\\n\t]+$"> };
+
+    if (ANIME.empty() || ANIME == "" || matcher_espacios(ANIME)) {
+        std::cerr << "Error: No se ha especificado el título a buscar.\n";
+        mostrar_ayuda();
+        exit(EXIT_FAILURE);
+    }
+    
+    constexpr auto matcher_caracteres_solos { ctre::match<"^(\\.)+$|^(,)+$|^(!)+$|^(:)+$|^(-)+$|^(`)+$|^(\\[)+$|^(\\])+$|^(\\()+$|^(\\))+$|^(\")+$|^(')+$|^(%2B)+$|^(\\\\)+$|^(/)+$|^(\\e)+$|^(\\n)+$"> };
+
+    if (matcher_caracteres_solos(ANIME) || ANIME.contains("\\\\") || ANIME.contains("/") ||
+        ANIME.contains("\\e") || ANIME.contains("\\s") || ANIME.contains("\t") ||
+        ANIME.contains("\n") || ANIME.contains("\\")) {
+        std::cerr << "Error: El título ingresado no es válido.\n";
+        exit(EXIT_FAILURE);
+    }
+}
+
 std::string consultar_sitio(const std::string& sitio) {
-    std::ostringstream os {};
+    /*std::ostringstream os {};
     curlpp::options::WriteStream ws{&os};
 
     try {
@@ -148,11 +205,11 @@ std::string consultar_sitio(const std::string& sitio) {
 		std::cout << e.what() << '\n';
 	}
 
-    return os.str();
-/*
+    return os.str();*/
+
     std::string salida {};
 
-    std::ifstream inf{ "text.txt" };
+    std::ifstream inf{ sitio };
 
     if (!inf)
     {
@@ -165,7 +222,7 @@ std::string consultar_sitio(const std::string& sitio) {
         salida += linea + '\n';
     }
 
-    return salida;*/
+    return salida;
 }
 
 std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
@@ -176,7 +233,7 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
 
     // Verificar paginación
     if (respuesta_sitio.contains("\">»</a>")) {
-        auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!--]">(respuesta_sitio) };
+        const auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!--]">(respuesta_sitio) };
 
         std::string ultimo_resultado {};
 
@@ -189,10 +246,10 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
         numero_ultima_pagina = std::stoi(ultimo_resultado);
     }
 
-    auto extraer_titulo_y_link = [](const std::string& pagina_fuente) {
+    const auto extraer_titulo_y_link = [](const std::string& pagina_fuente) {
         std::unordered_map<std::string, std::string> titulos_con_links {};
 
-        auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
+        const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
 
         for (const auto& resultado: busqueda_resultados_pagina) {
             std::string r { resultado.begin(), resultado.end() };
@@ -214,7 +271,7 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
                 [](unsigned char c){ return std::tolower(c); }
             );
             std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") }; 
-            temp_anime = temp_anime.substr(0, temp_anime.size()-1);
+            temp_anime = std::regex_replace(temp_anime, std::regex{"%2B"}, "+"); 
 
             if (!temp_titulo.contains(temp_anime)) continue;
 
@@ -236,3 +293,70 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
     return animes_encontrados;
 }
 
+std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados) {
+
+    const auto mejorar_presentacion_titulo = [](){
+        std::string r { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
+        return std::regex_replace(r, std::regex{"%2B"}, "+");
+    };
+    
+    std::cout << "Resultados para \"" << mejorar_presentacion_titulo() << "\":\n\n";
+
+    int indice_resultado {};
+    for (const auto& a: animes_encontrados) {
+        ++indice_resultado;
+        std::cout << indice_resultado << ". " << a.first << '\n';
+    }
+
+    int indice_seleccion_titulo {};
+    std::string temp_seleccion_titulo {};
+    std::cout << "\nSelecciona la opción que deseas ver: "; std::cin >> temp_seleccion_titulo; std::cout << '\n';
+
+    if (verificar_argumento_numerico(temp_seleccion_titulo)) indice_seleccion_titulo = std::stoi(temp_seleccion_titulo); 
+    else exit(EXIT_FAILURE);
+
+    if (indice_seleccion_titulo > indice_resultado) {
+        std::cerr << "Error: La selección está fuera de los resultados encontrados.\n";
+        exit(EXIT_FAILURE);
+    }
+
+    std::string titulo_seleccionado {};
+    int indice_helper { 1 };
+
+    for (const auto& a: animes_encontrados) {
+        if (indice_helper == indice_seleccion_titulo) {
+            titulo_seleccionado = a.first;
+            break;
+        }else {
+            ++indice_helper;
+        }
+    }
+
+    return titulo_seleccionado;
+}
+
+void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado) {
+
+    const auto busqueda_numero_episodios { ctre::search<"episodesCount:[0-9]+,s">(respuesta_titulo_seleccionado) };
+
+    std::string r { busqueda_numero_episodios.begin(), busqueda_numero_episodios.end() };
+    r = std::regex_replace(r, std::regex{"episodesCount:"}, "");
+    r = std::regex_replace(r, std::regex{",s"}, "");
+
+    int numero_total_episodios { std::stoi(r) };
+
+    if (!EPISODIO) {
+        std::string temp_episodio {};
+        std::cout << titulo_seleccionado << " tiene " << numero_total_episodios << " episodios disponibles.\n";
+        std::cout << "Ingresa el episodio que deseas ver: "; std::cin >> temp_episodio; std::cout << '\n';         
+
+        if (verificar_argumento_numerico(temp_episodio)) EPISODIO = std::stoi(temp_episodio);
+        else exit(EXIT_FAILURE);
+    }
+
+    if (EPISODIO > numero_total_episodios) {
+        std::cerr << "Error: El número de episodio ingresado es mayor al total de disponibles en "
+                  << titulo_seleccionado << " (" << numero_total_episodios << ")\n";
+        exit(EXIT_FAILURE);
+    } 
+}
