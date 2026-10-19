@@ -1,20 +1,14 @@
 {
   "name": "anies-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "",
   "maintainers": "KNZodiac24",
   "license": "GPL-3.0",
   "dependencies": [
     {
       "name": "ctre",
-      "version>=": "3.10.0"
+      "version>=": "3.11.0"
     }
-  ],
-  "overrides": [
-    {
-      "name": "ctre",
-      "version": "3.10.0"
-    }
-  ],
+  ], 
   "builtin-baseline": "0b88aacde46a853151730fbe7d0b7ee45f4b6864"
 }

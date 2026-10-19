@@ -16,14 +16,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <fstream>
 #include <iostream>
-#include <sstream>
+#include <regex>
+// #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
+#include <ctre.hpp>
 
 //////// Preliminares ////////
 
@@ -46,13 +50,13 @@ void mostrar_ayuda() {
 
 bool verificar_argumento_episodio(const std::string& arg_episodio);
 
-std::string realizar_consulta_sitio();
+std::string consultar_sitio(const std::string& sitio);
 
-std::vector<std::string_view> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
+std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
 //////// Main ////////
 
-constexpr std::string_view VERSION_PROGRAMA { "0.1.0" };
+constexpr std::string_view VERSION_PROGRAMA { "0.2.0" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string_view REPRODUCTOR { "mpv" };
 constinit std::string ANIME {};
@@ -98,12 +102,14 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const std::string respuesta_sitio { realizar_consulta_sitio() };
+    const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
 
-    const std::vector<std::string_view> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
+    const std::unordered_map<std::string, std::string> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
     return 0;
 }
+
+/////// Definiciones ///////
 
 bool verificar_argumento_episodio(const std::string& arg_episodio) {
     try {
@@ -124,14 +130,14 @@ bool verificar_argumento_episodio(const std::string& arg_episodio) {
     return false;
 }
 
-std::string realizar_consulta_sitio() {
-    std::ostringstream os {};
+std::string consultar_sitio(const std::string& sitio) {
+    /*std::ostringstream os {};
     curlpp::options::WriteStream ws{&os};
 
     try {
 		curlpp::Easy req {};
 
-		req.setOpt<curlpp::options::Url>(SITIO_ANIME+"catalogo?search="+ANIME);
+		req.setOpt<curlpp::options::Url>(sitio);
 
         req.setOpt(ws);
 
@@ -142,28 +148,89 @@ std::string realizar_consulta_sitio() {
 		std::cout << e.what() << '\n';
 	}
 
-    return os.str();
+    return os.str();*/
+
+    std::string salida {};
+
+    std::ifstream inf{ "text.txt" };
+
+    if (!inf)
+    {
+        std::cerr << "Error al leer archivo\n";
+        exit(EXIT_FAILURE);
+    }
+
+    std::string linea {};
+    while (std::getline(inf, linea)) { 
+        salida += linea + '\n';
+    }
+
+    return salida;
 }
 
-std::vector<std::string_view> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
-    
-    std::vector<std::string_view> animes_encontrados {};
+std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
 
-    // Primero determinar si hay paginación para encontrar todos los resultados posibles:
-    // Buscar el patrón ">»</a>
-    // Si no se encuentra entonces proseguir normalmente
-    // Si se encuentra entonces buscar el patrón ">[0-9]{1,}</a><!--] y extraer el número del último resultado
-    //
-    // En caso de haber encontrado paginación, ir rotando en cada página haciendo el proceso de abajo, tomando
-    // en cuenta el número extraido anteriormente como límite.
-    //
-    // Proceso: Leer el json disponible en la página para listar los resultados. En cada resultado verificar si 
-    // se encuentra una coincidencia exacta (ignorecase) con el nombre ingresado por el usuario, ya que
-    // por alguna razón animeav1 suele lanzar resultados que no tienen que ver. Ir acumulando los resultados en 
-    // el array final.
-    //
-    // PS: si me animo les ordeno alfabéticamente
+    std::unordered_map<std::string, std::string> animes_encontrados {};
+ 
+    int numero_ultima_pagina { 1 };
 
+    // Verificar paginación
+    if (respuesta_sitio.contains("\">»</a>")) {
+        auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!--]">(respuesta_sitio) };
+
+        std::string ultimo_resultado {};
+
+        for (const auto& r: busqueda_numero_paginas) {
+            ultimo_resultado = r;
+        }
+
+        ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"\">"}, "");
+        ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"</a><!--]"}, "");
+        numero_ultima_pagina = std::stoi(ultimo_resultado);
+    }
+
+    auto extraer_titulo_y_link = [](const std::string& pagina_fuente) {
+        std::unordered_map<std::string, std::string> titulos_con_links {};
+
+        auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
+
+        for (const auto& resultado: busqueda_resultados_pagina) {
+            std::string r { resultado.begin(), resultado.end() };
+
+            r = std::regex_replace(r, std::regex{"title:\""}, "");
+            r = std::regex_replace(r, std::regex{"\",synopsis:\".+?,slug:\""}, "%");
+            r = std::regex_replace(r, std::regex{"\""}, "");
+
+            std::string titulo { r.substr(0, r.find('%')) };
+            std::string link { r.substr(r.find('%')+1, r.size()-1) };
+
+            // Este bloque es para solo añadir una verificacón de que lo ingresado por el usuario salga en la búsqueda,
+            // ya que por alguna razón animeav1 suele mostrar resultados que no tienen que ver
+            std::string temp_titulo { titulo };
+            std::transform(
+                temp_titulo.begin(),
+                temp_titulo.end(),
+                temp_titulo.begin(),
+                [](unsigned char c){ return std::tolower(c); }
+            );
+            std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") }; 
+            temp_anime = temp_anime.substr(0, temp_anime.size()-1);
+
+            if (!temp_titulo.contains(temp_anime)) continue;
+
+            titulos_con_links.insert({titulo, link});
+        }
+
+        return titulos_con_links;
+    }; 
+
+    auto temp { extraer_titulo_y_link(respuesta_sitio) };
+
+/*
+    for (int i { 1 }; i <= numero_ultima_pagina; ++i) {
+        
+    }
+*/
     return animes_encontrados;
 }
 
