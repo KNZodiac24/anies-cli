@@ -1,6 +1,6 @@
 /*
  *  anies-cli: Aplicación de consola para ver anime en español
- *  Copyright (C) 2024-2026 KNZodiac24
+ *  Copyright (C) 2024, 2026 KNZodiac24
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ *  Repo: https://github.com/KNZodiac24/anies-cli
  */
 
 #include <fstream>
@@ -42,7 +44,7 @@ void mostrar_ayuda() {
         -e <número>             Especificar el número de episodio a reproducir
 
     Ejemplos de uso:
-        anies-cli one piece -v
+        anies-cli one piece --vlc
         anies-cli naruto
         anies-cli -e 24 bleach
         anies-cli jujutsu kaisen -e 9)" << '\n';
@@ -66,9 +68,13 @@ std::string seleccionar_titulo(const std::unordered_map<std::string, std::string
 
 void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado);
 
+std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado);
+
+std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links);
+
 //////// Main ////////
 
-constexpr std::string_view VERSION_PROGRAMA { "0.5.3" };
+constexpr std::string_view VERSION_PROGRAMA { "0.7.0" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string_view REPRODUCTOR { "mpv" };
 constinit std::string ANIME {};
@@ -135,7 +141,16 @@ int main(int argc, char *argv[]) {
     const std::string respuesta_titulo_seleccionado { consultar_sitio("text_anime.txt") };
 
     seleccionar_episodio(titulo_seleccionado, respuesta_titulo_seleccionado);
- 
+
+    const std::string link_episodio_seleccionado { link_titulo_seleccionado+std::to_string(EPISODIO) };
+
+    // const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
+    const std::string respuesta_episodio_seleccionado { consultar_sitio("text_episodio.txt") };
+
+    const std::unordered_map<std::string, std::string> servers_con_links { generar_servers_con_links(respuesta_episodio_seleccionado) };
+
+    const std::vector<std::string> links_video_episodio { obtener_links_video(servers_con_links) };
+
     return 0;
 }
 
@@ -359,4 +374,49 @@ void seleccionar_episodio(const std::string& titulo_seleccionado, const std::str
                   << titulo_seleccionado << " (" << numero_total_episodios << ")\n";
         exit(EXIT_FAILURE);
     } 
+}
+
+std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado) {
+
+    const auto busqueda_servers_con_links { ctre::search<"embeds:\\{.*SUB:\\[\\{server:\".+\",url:\".+\"\\}\\]\\},">(respuesta_episodio_seleccionado) };
+
+    std::string r { busqueda_servers_con_links.begin(), busqueda_servers_con_links.end() };
+
+    r = std::regex_replace(r, std::regex{"embeds:.+SUB:\\[\\{"}, "");
+    r = std::regex_replace(r, std::regex{"\\}\\]\\},"}, "");
+
+    const auto extraccion_servers_y_links { ctre::search_all<"server:\".+?\",url:\".+?\"">(r) };
+
+    std::unordered_map<std::string, std::string> servers_con_links {};
+
+    for (const auto& e: extraccion_servers_y_links) {
+        std::string s { e.begin(), e.end() };
+
+        s = std::regex_replace(s, std::regex{"server:\""}, "");
+        s = std::regex_replace(s, std::regex{"\",url:\""}, "%");
+        s = std::regex_replace(s, std::regex{"\""}, "");
+
+        std::string server { s.substr(0, s.find('%')) };
+        std::string link { s.substr(s.find('%')+1, s.size()-1) };
+
+        servers_con_links.insert({server, link});
+    }
+
+    return servers_con_links;
+}
+
+std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links){
+
+    std::vector<std::string> links_video {};
+
+    // if/else en vez de switch para ir guardando en el mismo orden preferido de las opciones de reproducción de la página,
+    // manteniendo como resultados principales los links que menos tienden a caerse
+    for (const auto& s: servers_con_links) {
+        if (s.first == "HLS") {
+            const std::string id { std::regex_replace(s.second, std::regex{".+/play/"}, "") };
+            links_video.emplace_back("https://player.zilla-networks.com/m3u8/"+id); // Increíble lo que tuve que monear, investigar y entender solo para obtener este link...
+        }
+    }
+
+    return links_video;
 }

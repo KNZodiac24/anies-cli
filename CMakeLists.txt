@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 0.5.3 LANGUAGES CXX)
+project(anies-cli VERSION 0.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(CMAKE_BUILD_TYPE Release)
 
 find_package(ctre CONFIG REQUIRED)
 
@@ -35,4 +37,4 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -Wdouble-promotion
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE curlpp ctre::ctre)
+target_link_libraries(${PROJECT_NAME} PRIVATE curlpp_static ctre::ctre)
