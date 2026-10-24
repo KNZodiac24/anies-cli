@@ -18,10 +18,10 @@
  *  Repo: https://github.com/KNZodiac24/anies-cli
  */
 
-#include <fstream>
+// #include <fstream>
 #include <iostream>
 #include <regex>
-// #include <sstream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -30,6 +30,13 @@
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
 #include <ctre.hpp>
+#include <botan/cipher_mode.h>
+#include <botan/hex.h>
+#if defined(__linux__)
+#include <unistd.h>
+#elif defined(_WIN32)
+#include <process.h>
+#endif
 
 //////// Preliminares ////////
 
@@ -60,7 +67,7 @@ bool verificar_argumento_numerico(const std::string& arg);
 
 void validar_titulo_anime();
 
-std::string consultar_sitio(const std::string& sitio);
+std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers = {});
 
 std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
@@ -72,9 +79,11 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
 
 std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links);
 
+void reproducir(const std::vector<std::string>& links_video_episodio);
+
 //////// Main ////////
 
-constexpr std::string_view VERSION_PROGRAMA { "0.7.0" };
+constexpr std::string_view VERSION_PROGRAMA { "0.7.2" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string_view REPRODUCTOR { "mpv" };
 constinit std::string ANIME {};
@@ -128,8 +137,8 @@ int main(int argc, char *argv[]) {
 
     validar_titulo_anime();
 
-    // const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
-    const std::string respuesta_sitio { consultar_sitio("text_consulta.txt") };
+    const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
+    // const std::string respuesta_sitio { consultar_sitio("text_consulta.txt") };
 
     const std::unordered_map<std::string, std::string> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
@@ -137,19 +146,21 @@ int main(int argc, char *argv[]) {
 
     const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.at(titulo_seleccionado) };
 
-    // const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
-    const std::string respuesta_titulo_seleccionado { consultar_sitio("text_anime.txt") };
+    const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
+    // const std::string respuesta_titulo_seleccionado { consultar_sitio("text_anime.txt") };
 
     seleccionar_episodio(titulo_seleccionado, respuesta_titulo_seleccionado);
 
-    const std::string link_episodio_seleccionado { link_titulo_seleccionado+std::to_string(EPISODIO) };
+    const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
 
-    // const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
-    const std::string respuesta_episodio_seleccionado { consultar_sitio("text_episodio.txt") };
+    const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
+    // const std::string respuesta_episodio_seleccionado { consultar_sitio("text_episodio.txt") };
 
     const std::unordered_map<std::string, std::string> servers_con_links { generar_servers_con_links(respuesta_episodio_seleccionado) };
 
     const std::vector<std::string> links_video_episodio { obtener_links_video(servers_con_links) };
+
+    reproducir(links_video_episodio);
 
     return 0;
 }
@@ -202,14 +213,33 @@ void validar_titulo_anime() {
     }
 }
 
-std::string consultar_sitio(const std::string& sitio) {
-    /*std::ostringstream os {};
+std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers) {
+    std::ostringstream os {};
     curlpp::options::WriteStream ws{&os};
 
     try {
 		curlpp::Easy req {};
 
+        std::list<std::string> headers {
+            "accept: */*",
+            "accept-language: es-419,es;q=0.8",
+            "cache-control: no-cache",
+            "pragma: no-cache",
+            "priority: u=1, i",
+            "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\"",
+            "sec-ch-ua-mobile: ?0",
+            "sec-ch-ua-platform: \"Linux\"", 
+            "sec-gpc: 1",
+            "user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+        };
+        if (otros_headers.size()) {
+            for (const auto& h: otros_headers) {
+                headers.emplace_back(h);
+            }
+        }
+
 		req.setOpt<curlpp::options::Url>(sitio);
+        req.setOpt<curlpp::options::HttpHeader>(headers); 
 
         req.setOpt(ws);
 
@@ -220,9 +250,9 @@ std::string consultar_sitio(const std::string& sitio) {
 		std::cout << e.what() << '\n';
 	}
 
-    return os.str();*/
+    return os.str();
 
-    std::string salida {};
+/*    std::string salida {};
 
     std::ifstream inf{ sitio };
 
@@ -237,7 +267,7 @@ std::string consultar_sitio(const std::string& sitio) {
         salida += linea + '\n';
     }
 
-    return salida;
+    return salida;*/
 }
 
 std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
@@ -267,7 +297,7 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
         const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
 
         for (const auto& resultado: busqueda_resultados_pagina) {
-            std::string r { resultado.begin(), resultado.end() };
+            std::string r { resultado.to_string() };
 
             r = std::regex_replace(r, std::regex{"title:\""}, "");
             r = std::regex_replace(r, std::regex{"\",synopsis:\".+?,slug:\""}, "%");
@@ -352,9 +382,9 @@ std::string seleccionar_titulo(const std::unordered_map<std::string, std::string
 
 void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado) {
 
-    const auto busqueda_numero_episodios { ctre::search<"episodesCount:[0-9]+,s">(respuesta_titulo_seleccionado) };
+    constexpr auto busqueda_numero_episodios { ctre::search<"episodesCount:[0-9]+,s"> };
 
-    std::string r { busqueda_numero_episodios.begin(), busqueda_numero_episodios.end() };
+    std::string r { busqueda_numero_episodios(respuesta_titulo_seleccionado).to_string() };
     r = std::regex_replace(r, std::regex{"episodesCount:"}, "");
     r = std::regex_replace(r, std::regex{",s"}, "");
 
@@ -378,10 +408,10 @@ void seleccionar_episodio(const std::string& titulo_seleccionado, const std::str
 
 std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado) {
 
-    const auto busqueda_servers_con_links { ctre::search<"embeds:\\{.*SUB:\\[\\{server:\".+\",url:\".+\"\\}\\]\\},">(respuesta_episodio_seleccionado) };
-
-    std::string r { busqueda_servers_con_links.begin(), busqueda_servers_con_links.end() };
-
+    constexpr auto busqueda_servers_con_links { ctre::search<"embeds:\\{.*SUB:\\[\\{server:\".+\",url:\".+\"\\}\\]\\},"> };
+    
+    std::string r { busqueda_servers_con_links(respuesta_episodio_seleccionado).to_string() };
+    
     r = std::regex_replace(r, std::regex{"embeds:.+SUB:\\[\\{"}, "");
     r = std::regex_replace(r, std::regex{"\\}\\]\\},"}, "");
 
@@ -390,7 +420,7 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
     std::unordered_map<std::string, std::string> servers_con_links {};
 
     for (const auto& e: extraccion_servers_y_links) {
-        std::string s { e.begin(), e.end() };
+        std::string s { e.to_string() };
 
         s = std::regex_replace(s, std::regex{"server:\""}, "");
         s = std::regex_replace(s, std::regex{"\",url:\""}, "%");
@@ -409,14 +439,60 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 
     std::vector<std::string> links_video {};
 
-    // if/else en vez de switch para ir guardando en el mismo orden preferido de las opciones de reproducción de la página,
-    // manteniendo como resultados principales los links que menos tienden a caerse
     for (const auto& s: servers_con_links) {
         if (s.first == "HLS") {
             const std::string id { std::regex_replace(s.second, std::regex{".+/play/"}, "") };
             links_video.emplace_back("https://player.zilla-networks.com/m3u8/"+id); // Increíble lo que tuve que monear, investigar y entender solo para obtener este link...
+            continue;
         }
+        
+        if (s.first == "UPNShare") {
+            const std::string link { s.second };
+            const std::string id { link.substr(link.find('#')+1, link.size()-1) };
+            const std::string hex { consultar_sitio("https://animeav1.uns.bio/api/v1/video?id="+id, {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}) };
+            const std::vector<unsigned char> cifrado { Botan::hex_decode(hex) };
+
+            const auto aes { Botan::Cipher_Mode::create_or_throw("AES-128/CBC/PKCS7", Botan::Cipher_Dir::Decryption) };
+            aes->set_key(Botan::hex_decode("6b69656d7469656e6d75613931316361"));
+            aes->start(Botan::hex_decode("313233343536373839306f6975797472"));
+
+            Botan::secure_vector<unsigned char> buffer { cifrado.begin(), cifrado.end() };
+
+            aes->finish(buffer);
+
+            const std::vector<unsigned char> descifrado { buffer.begin(), buffer.end() };
+
+            const std::string resultado { descifrado.begin(), descifrado.end() };
+
+            constexpr auto busqueda_1 { ctre::search<"Tiktok\\\\\".+?disabled.+?domain.+?params"> };
+
+            std::string p1 { busqueda_1(resultado).to_string() };
+            p1 = std::regex_replace(p1, std::regex{".+domain\\\\\":\\\\\""}, "");
+            p1 = std::regex_replace(p1, std::regex{"\\\\\",\\\\\"params"}, "");
+
+            constexpr auto busqueda_2 { ctre::search<"hls\\\\/.+?m3u8"> };
+
+            std::string p2 { busqueda_2(resultado).to_string() };
+            p2 = std::regex_replace(p2, std::regex{"hls\\\\/"}, "");
+            p2 = std::regex_replace(p2, std::regex{"\\\\"}, "");
+
+            constexpr auto busqueda_3 { ctre::search<"v\\\\\":\\\\\".+?\\\\\"\\}\\}"> };
+
+            std::string p3 { busqueda_3(resultado).to_string() }; 
+            p3 = std::regex_replace(p3, std::regex{"v\\\\\":\\\\\""}, "");
+            p3 = std::regex_replace(p3, std::regex{"\\\\\"\\}\\}"}, "");
+
+            links_video.emplace_back("https://animeav1.uns.bio/hlsmod/"+p1+'/'+p2+"?v="+p3); // Bueno, obtener este estuvo más interesante...
+
+            continue;
+        } // Creo que de momento solo esos 2 bastan
     }
 
     return links_video;
+}
+
+void reproducir(const std::vector<std::string>& links_video_episodio) {
+    for (const auto& xd: links_video_episodio) {
+        std::cout << xd << '\n';
+    }
 }

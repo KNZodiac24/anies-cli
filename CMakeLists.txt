@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 0.7.0 LANGUAGES CXX)
+project(anies-cli VERSION 0.7.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_BUILD_TYPE Release)
 
 find_package(ctre CONFIG REQUIRED)
+find_package(botan CONFIG REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(curlpp GIT_REPOSITORY https://github.com/jpbarrette/curlpp.git
@@ -37,4 +38,4 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -Wdouble-promotion
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE curlpp_static ctre::ctre)
+target_link_libraries(${PROJECT_NAME} PRIVATE curlpp_static ctre::ctre Botan::Botan-static botan::botan-static)
