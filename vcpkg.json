@@ -12,6 +12,10 @@
     {
       "name": "botan",
       "version>=": "3.13.0"
+    },
+    {
+      "name": "boost-process",
+      "version>=": "1.92.0"
     }
   ],
   "builtin-baseline": "0b88aacde46a853151730fbe7d0b7ee45f4b6864"

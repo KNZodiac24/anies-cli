@@ -10,6 +10,7 @@ set(CMAKE_BUILD_TYPE Release)
 
 find_package(ctre CONFIG REQUIRED)
 find_package(botan CONFIG REQUIRED)
+find_package(Boost REQUIRED COMPONENTS process)
 
 include(FetchContent)
 FetchContent_Declare(curlpp GIT_REPOSITORY https://github.com/jpbarrette/curlpp.git
@@ -38,4 +39,4 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -Wdouble-promotion
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE curlpp_static ctre::ctre Botan::Botan-static botan::botan-static)
+target_link_libraries(${PROJECT_NAME} PRIVATE curlpp_static ctre::ctre Botan::Botan-static botan::botan-static Boost::process)

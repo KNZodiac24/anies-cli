@@ -32,11 +32,8 @@
 #include <ctre.hpp>
 #include <botan/cipher_mode.h>
 #include <botan/hex.h>
-#if defined(__linux__)
-#include <unistd.h>
-#elif defined(_WIN32)
-#include <process.h>
-#endif
+#include <boost/process.hpp>
+#include <boost/asio.hpp>
 
 //////// Preliminares ////////
 
@@ -78,6 +75,8 @@ void seleccionar_episodio(const std::string& titulo_seleccionado, const std::str
 std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado);
 
 std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links);
+
+void exec_anies_cli(const std::vector<std::string>& args);
 
 void reproducir(const std::vector<std::string>& links_video_episodio);
 
@@ -344,7 +343,7 @@ std::string seleccionar_titulo(const std::unordered_map<std::string, std::string
         std::string r { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
         return std::regex_replace(r, std::regex{"%2B"}, "+");
     };
-    
+
     std::cout << "Resultados para \"" << mejorar_presentacion_titulo() << "\":\n\n";
 
     int indice_resultado {};
@@ -439,17 +438,21 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 
     std::vector<std::string> links_video {};
 
-    for (const auto& s: servers_con_links) {
-        if (s.first == "HLS") {
-            const std::string id { std::regex_replace(s.second, std::regex{".+/play/"}, "") };
+    // for (const auto& s: servers_con_links) {
+        if (servers_con_links.contains("HLS")) {
+            const std::string id { std::regex_replace(servers_con_links.at("HLS"), std::regex{".+/play/"}, "") };
             links_video.emplace_back("https://player.zilla-networks.com/m3u8/"+id); // Increíble lo que tuve que monear, investigar y entender solo para obtener este link...
-            continue;
+            // continue;
         }
-        
-        if (s.first == "UPNShare") {
-            const std::string link { s.second };
+
+        if (servers_con_links.contains("UPNShare")) {
+            const std::string link { servers_con_links.at("UPNShare") };
             const std::string id { link.substr(link.find('#')+1, link.size()-1) };
             const std::string hex { consultar_sitio("https://animeav1.uns.bio/api/v1/video?id="+id, {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}) };
+
+            constexpr auto match_hex { ctre::match<"^[0-9a-f]+$"> };
+            if (!match_hex(hex)) goto xd;
+
             const std::vector<unsigned char> cifrado { Botan::hex_decode(hex) };
 
             const auto aes { Botan::Cipher_Mode::create_or_throw("AES-128/CBC/PKCS7", Botan::Cipher_Dir::Decryption) };
@@ -483,16 +486,34 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
             p3 = std::regex_replace(p3, std::regex{"\\\\\"\\}\\}"}, "");
 
             links_video.emplace_back("https://animeav1.uns.bio/hlsmod/"+p1+'/'+p2+"?v="+p3); // Bueno, obtener este estuvo más interesante...
-
-            continue;
+            // continue;
         } // Creo que de momento solo esos 2 bastan
-    }
+    // }
 
+    xd:
     return links_video;
 }
 
-void reproducir(const std::vector<std::string>& links_video_episodio) {
-    for (const auto& xd: links_video_episodio) {
-        std::cout << xd << '\n';
+void exec_anies_cli(const std::vector<std::string>& args) {
+    namespace bp = boost::process;
+    namespace asio = boost::asio;
+
+    asio::io_context ctx {};
+
+    bp::process proc {ctx, "/usr/bin/mpv", args};
+
+    if (proc.wait() == 0) {
+        std::cout << "Acabó bien\n";
+        exit(EXIT_SUCCESS);
+    } else {
+        std::cout << "Acabó mal\n";
     }
+}
+
+void reproducir(const std::vector<std::string>& links_video_episodio) {
+
+    std::cout << links_video_episodio[0]<<'\n';
+    std::vector<std::string> args { links_video_episodio[0], "--http-header-fields='accept: */*','accept-language: es-419,es;q=0.8','cache-control: no-cache','pragma: no-cache','priority: i','range: bytes=0-','referer: "+links_video_episodio[0]+"','sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\"','sec-ch-ua-mobile: ?0','sec-ch-ua-platform: \"Linux\"','sec-fetch-dest: video','sec-fetch-mode: cors','sec-fetch-site: same-origin','sec-gpc: 1','user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36'"};
+
+    exec_anies_cli(args);
 }
