@@ -1,7 +1,7 @@
 {
   "name": "anies-cli",
-  "version": "0.7.2",
-  "description": "",
+  "version": "0.8.1",
+  "description": "Aplicación de consola para ver anime en español",
   "maintainers": "KNZodiac24",
   "license": "GPL-3.0",
   "dependencies": [
