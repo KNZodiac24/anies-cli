@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 0.8.1 LANGUAGES CXX)
+project(anies-cli VERSION 0.8.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

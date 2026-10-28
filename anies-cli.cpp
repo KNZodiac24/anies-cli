@@ -18,8 +18,6 @@
  *  Repo: https://github.com/KNZodiac24/anies-cli
  */
 
-// #include <fstream>
-#include <array>
 #include <iostream>
 #include <regex>
 #include <sstream>
@@ -27,6 +25,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <array>
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
@@ -40,17 +39,16 @@
 
 void mostrar_ayuda() {
     std::cout << R"(
-    anies-cli [OPCIONES] [BÚSQUEDA]
+anies-cli [OPCIONES] [BÚSQUEDA]
 
     OPCIONES:
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
         -v, --version           Mostrar la versión del programa
-        --vlc                   Usar VLC como reproductor. Se utiliza MPV por defecto
         -e <número>             Especificar el número de episodio a reproducir
 
     Ejemplos de uso:
-        anies-cli one piece --vlc
-        anies-cli naruto
+        anies-cli one piece
+        anies-cli naruto -e 10
         anies-cli -e 24 bleach
         anies-cli jujutsu kaisen -e 9)" << '\n';
 }
@@ -67,9 +65,9 @@ void validar_titulo_anime();
 
 std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers = {});
 
-std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
+std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
-std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados);
+std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite);
 
 void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado);
 
@@ -83,9 +81,8 @@ void reproducir(const std::vector<std::string>& links_video_episodio);
 
 //////// Main ////////
 
-constexpr std::string_view VERSION_PROGRAMA { "0.8.1" };
+constexpr std::string_view VERSION_PROGRAMA { "0.8.3" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
-constinit std::string_view REPRODUCTOR { "mpv" };
 constinit std::string ANIME {};
 constinit int EPISODIO {};
 
@@ -108,10 +105,6 @@ int main(int argc, char *argv[]) {
         else if (op == "-v" || op == "--version") {
             std::cout << VERSION_PROGRAMA << '\n';
             exit(EXIT_SUCCESS);
-        }
-        else if (op == "--vlc"){
-            REPRODUCTOR = "vlc";
-            continue;
         }
         else if (op == "-e") {
             if (static_cast<int>(i+1) < argc && verificar_argumento_numerico(argumentos[i+1])) { 
@@ -139,11 +132,11 @@ int main(int argc, char *argv[]) {
 
     const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
 
-    const std::unordered_map<std::string, std::string> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
+    const std::pair<std::unordered_map<std::string, std::string>, bool> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
-    const std::string titulo_seleccionado { seleccionar_titulo(animes_encontrados) };
+    const std::string titulo_seleccionado { seleccionar_titulo(animes_encontrados.first, animes_encontrados.second) };
 
-    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.at(titulo_seleccionado) };
+    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.first.at(titulo_seleccionado) };
 
     const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
@@ -248,29 +241,13 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
     }
 
     return os.str();
-
-/*    std::string salida {};
-
-    std::ifstream inf{ sitio };
-
-    if (!inf)
-    {
-        std::cerr << "Error al leer archivo\n";
-        exit(EXIT_FAILURE);
-    }
-
-    std::string linea {};
-    while (std::getline(inf, linea)) { 
-        salida += linea + '\n';
-    }
-
-    return salida;*/
 }
 
-std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
+std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
 
     std::unordered_map<std::string, std::string> animes_encontrados {};
- 
+    bool resultados_mas_del_limite {};
+
     int numero_ultima_pagina { 1 };
 
     // Verificar paginación
@@ -288,17 +265,27 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
         numero_ultima_pagina = std::stoi(ultimo_resultado);
     }
 
-    const auto extraer_titulo_y_link = [](const std::string& pagina_fuente) {
+    short numero_resultados_encontrados {};
+
+    const auto extraer_titulo_y_link = [&resultados_mas_del_limite, &numero_resultados_encontrados](const std::string& pagina_fuente) {
         std::unordered_map<std::string, std::string> titulos_con_links {};
 
-        const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
+        const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) }; 
 
         for (const auto& resultado: busqueda_resultados_pagina) {
+
+            if (numero_resultados_encontrados == 50) {
+                resultados_mas_del_limite = true;
+                break;
+            }
+
             std::string r { resultado.to_string() };
 
             r = std::regex_replace(r, std::regex{"title:\""}, "");
             r = std::regex_replace(r, std::regex{"\",synopsis:\".+?,slug:\""}, "%");
+            r = std::regex_replace(r, std::regex{"\\\\\""}, "&quot");
             r = std::regex_replace(r, std::regex{"\""}, "");
+            r = std::regex_replace(r, std::regex{"&quot"}, "\"");
 
             const std::string titulo { r.substr(0, r.find('%')) };
             const std::string link { r.substr(r.find('%')+1, r.size()-1) };
@@ -318,6 +305,8 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
             if (!temp_titulo.contains(temp_anime)) continue;
 
             titulos_con_links.insert({titulo, link});
+
+            ++numero_resultados_encontrados;
         }
 
         return titulos_con_links;
@@ -326,21 +315,27 @@ std::unordered_map<std::string, std::string> generar_lista_animes_encontrados(co
     for (int i { 1 }; i <= numero_ultima_pagina; ++i) {
         if (i == 1) animes_encontrados.merge(extraer_titulo_y_link(respuesta_sitio));
         else {
+            if (resultados_mas_del_limite) break;
             animes_encontrados.merge(
                 extraer_titulo_y_link(consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME+"&page="+std::to_string(i)))
             );
         }
     }
 
-    return animes_encontrados;
+    return std::pair{animes_encontrados, resultados_mas_del_limite};
 }
 
-std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados) {
+std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite) { 
 
     const auto mejorar_presentacion_titulo = [](){
         std::string r { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
         return std::regex_replace(r, std::regex{"%2B"}, "+");
     };
+
+    if (animes_encontrados.empty()) {
+        std::cout << "No se encontraron resultados para \"" << mejorar_presentacion_titulo() << "\".\n";
+        exit(EXIT_FAILURE);
+    }
 
     std::cout << "Resultados para \"" << mejorar_presentacion_titulo() << "\":\n\n";
 
@@ -348,6 +343,10 @@ std::string seleccionar_titulo(const std::unordered_map<std::string, std::string
     for (const auto& a: animes_encontrados) {
         ++indice_resultado;
         std::cout << indice_resultado << ". " << a.first << '\n';
+    }
+
+    if (resultados_mas_del_limite) {
+        std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
     }
 
     int indice_seleccion_titulo {};
