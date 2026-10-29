@@ -1,13 +1,20 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 0.8.3 LANGUAGES CXX)
+project(anies-cli VERSION 0.10.4 LANGUAGES CXX)
+
+add_compile_options(
+    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."
+    "-ffile-prefix-map=${CMAKE_BINARY_DIR}=."
+    "-fmacro-prefix-map=${VCPKG_INSTALLED_DIR}=."
+)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(BUILD_SHARED_LIBS OFF)
-
+set(VCPKG_LIBRARY_LINKAGE static)
+set(VCPKG_BUILD_TYPE release)
 set(CMAKE_BUILD_TYPE Release)
 
 find_package(ctre CONFIG REQUIRED)
@@ -41,4 +48,10 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -Wdouble-promotion
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE curlpp_static ctre::ctre Botan::Botan-static botan::botan-static Boost::process)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    curlpp_static
+    ctre::ctre
+    Botan::Botan-static
+    botan::botan-static
+    Boost::process
+)

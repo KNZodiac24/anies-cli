@@ -22,7 +22,6 @@
 #include <regex>
 #include <sstream>
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <vector>
 #include <array>
@@ -34,6 +33,9 @@
 #include <botan/hex.h>
 #include <boost/process.hpp>
 #include <boost/asio.hpp>
+#if defined(_WIN32)
+#include <conio.h>
+#endif
 
 //////// Preliminares ////////
 
@@ -67,7 +69,7 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
 
 std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
-std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite);
+void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite);
 
 void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado);
 
@@ -77,13 +79,19 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 
 int exec_anies_cli(const std::vector<std::string>& args);
 
+void limpiar_consola();
+
 void reproducir(const std::vector<std::string>& links_video_episodio);
+
+char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string_view VERSION_PROGRAMA { "0.8.3" };
+constexpr std::string VERSION_PROGRAMA { "0.10.4" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
+constinit std::string TITULO_SELECCIONADO {};
+constinit int TOTAL_EPISODIOS_ANIME {};
 constinit int EPISODIO {};
 
 int main(int argc, char *argv[]) {
@@ -107,7 +115,7 @@ int main(int argc, char *argv[]) {
             exit(EXIT_SUCCESS);
         }
         else if (op == "-e") {
-            if (static_cast<int>(i+1) < argc && verificar_argumento_numerico(argumentos[i+1])) { 
+            if (static_cast<int>(i+1) < argc && verificar_argumento_numerico(argumentos[i+1])) {
                 EPISODIO = std::stoi(argumentos[i+1]);
                 argumentos.erase(std::remove(argumentos.begin(), argumentos.end(), argumentos[i+1]), argumentos.cend());
                 continue;
@@ -134,23 +142,29 @@ int main(int argc, char *argv[]) {
 
     const std::pair<std::unordered_map<std::string, std::string>, bool> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
-    const std::string titulo_seleccionado { seleccionar_titulo(animes_encontrados.first, animes_encontrados.second) };
+    seleccionar_titulo(animes_encontrados.first, animes_encontrados.second);
 
-    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.first.at(titulo_seleccionado) };
+    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.first.at(TITULO_SELECCIONADO) };
 
     const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
-    seleccionar_episodio(titulo_seleccionado, respuesta_titulo_seleccionado);
+    seleccionar_episodio(TITULO_SELECCIONADO, respuesta_titulo_seleccionado);
 
-    const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
+    char opcion_reproduccion {};
 
-    const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
+    while (opcion_reproduccion != 'z') {
+        const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
 
-    const std::unordered_map<std::string, std::string> servers_con_links { generar_servers_con_links(respuesta_episodio_seleccionado) };
+        const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
 
-    const std::vector<std::string> links_video_episodio { obtener_links_video(servers_con_links) };
+        const std::unordered_map<std::string, std::string> servers_con_links { generar_servers_con_links(respuesta_episodio_seleccionado) };
 
-    reproducir(links_video_episodio);
+        const std::vector<std::string> links_video_episodio { obtener_links_video(servers_con_links) };
+
+        reproducir(links_video_episodio);
+
+        opcion_reproduccion = controlar_opciones_reproduccion();
+    }
 
     return 0;
 }
@@ -166,7 +180,7 @@ bool verificar_argumento_numerico(const std::string& arg) {
         }
 
         int num_temp { std::stoi(arg) };
-        
+
         if (num_temp > 0) return true;
 
         std::cerr << "Error: El número ingresado es menor al mínimo permitido.\n";
@@ -192,7 +206,7 @@ void validar_titulo_anime() {
         mostrar_ayuda();
         exit(EXIT_FAILURE);
     }
-    
+
     constexpr auto matcher_caracteres_solos { ctre::match<"^(\\.)+$|^(,)+$|^(!)+$|^(:)+$|^(-)+$|^(`)+$|^(\\[)+$|^(\\])+$|^(\\()+$|^(\\))+$|^(\")+$|^(')+$|^(%2B)+$|^(\\\\)+$|^(/)+$|^(\\e)+$|^(\\n)+$"> };
 
     if (matcher_caracteres_solos(ANIME) || ANIME.contains("\\\\") || ANIME.contains("/") ||
@@ -218,7 +232,7 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
             "priority: u=1, i",
             "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\"",
             "sec-ch-ua-mobile: ?0",
-            "sec-ch-ua-platform: \"Linux\"", 
+            "sec-ch-ua-platform: \"Linux\"",
             "sec-gpc: 1",
             "user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
         };
@@ -229,7 +243,7 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
         }
 
         req.setOpt<curlpp::options::Url>(sitio);
-        req.setOpt<curlpp::options::HttpHeader>(headers); 
+        req.setOpt<curlpp::options::HttpHeader>(headers);
 
         req.setOpt(ws);
 
@@ -270,7 +284,7 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
     const auto extraer_titulo_y_link = [&resultados_mas_del_limite, &numero_resultados_encontrados](const std::string& pagina_fuente) {
         std::unordered_map<std::string, std::string> titulos_con_links {};
 
-        const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) }; 
+        const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
 
         for (const auto& resultado: busqueda_resultados_pagina) {
 
@@ -299,8 +313,8 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
                 temp_titulo.begin(),
                 [](unsigned char c){ return std::tolower(c); }
             );
-            std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") }; 
-            temp_anime = std::regex_replace(temp_anime, std::regex{"%2B"}, "+"); 
+            std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
+            temp_anime = std::regex_replace(temp_anime, std::regex{"%2B"}, "+");
 
             if (!temp_titulo.contains(temp_anime)) continue;
 
@@ -310,7 +324,7 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
         }
 
         return titulos_con_links;
-    }; 
+    };
 
     for (int i { 1 }; i <= numero_ultima_pagina; ++i) {
         if (i == 1) animes_encontrados.merge(extraer_titulo_y_link(respuesta_sitio));
@@ -325,7 +339,7 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
     return std::pair{animes_encontrados, resultados_mas_del_limite};
 }
 
-std::string seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite) { 
+void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite) {
 
     const auto mejorar_presentacion_titulo = [](){
         std::string r { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
@@ -345,15 +359,13 @@ std::string seleccionar_titulo(const std::unordered_map<std::string, std::string
         std::cout << indice_resultado << ". " << a.first << '\n';
     }
 
-    if (resultados_mas_del_limite) {
-        std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
-    }
+    if (resultados_mas_del_limite) std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
 
     int indice_seleccion_titulo {};
     std::string temp_seleccion_titulo {};
     std::cout << "\nSelecciona la opción que deseas ver: "; std::cin >> temp_seleccion_titulo; std::cout << '\n';
 
-    if (verificar_argumento_numerico(temp_seleccion_titulo)) indice_seleccion_titulo = std::stoi(temp_seleccion_titulo); 
+    if (verificar_argumento_numerico(temp_seleccion_titulo)) indice_seleccion_titulo = std::stoi(temp_seleccion_titulo);
     else exit(EXIT_FAILURE);
 
     if (indice_seleccion_titulo > indice_resultado) {
@@ -361,19 +373,16 @@ std::string seleccionar_titulo(const std::unordered_map<std::string, std::string
         exit(EXIT_FAILURE);
     }
 
-    std::string titulo_seleccionado {};
     int indice_helper { 1 };
 
     for (const auto& a: animes_encontrados) {
         if (indice_helper == indice_seleccion_titulo) {
-            titulo_seleccionado = a.first;
+            TITULO_SELECCIONADO = a.first;
             break;
         }else {
             ++indice_helper;
         }
     }
-
-    return titulo_seleccionado;
 }
 
 void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado) {
@@ -386,7 +395,14 @@ void seleccionar_episodio(const std::string& titulo_seleccionado, const std::str
 
     int numero_total_episodios { std::stoi(r) };
 
+    TOTAL_EPISODIOS_ANIME = numero_total_episodios;
+
     if (!EPISODIO) {
+        if (numero_total_episodios == 1) {
+            EPISODIO = 1;
+            return;
+        }
+
         std::string temp_episodio {};
         std::cout << titulo_seleccionado << " tiene " << numero_total_episodios << " episodios disponibles.\n";
         std::cout << "Ingresa el episodio que deseas ver: "; std::cin >> temp_episodio; std::cout << '\n';
@@ -399,7 +415,7 @@ void seleccionar_episodio(const std::string& titulo_seleccionado, const std::str
         std::cerr << "Error: El número de episodio ingresado es mayor al total de disponibles en "
                   << titulo_seleccionado << " (" << numero_total_episodios << ")\n";
         exit(EXIT_FAILURE);
-    } 
+    }
 }
 
 std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado) {
@@ -432,6 +448,11 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
 }
 
 std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links){
+
+    if (servers_con_links.empty()) {
+        std::cout << "El episodio existe pero no se encontraron servidores fuente disponibles.\n";
+        exit(EXIT_FAILURE);
+    }
 
     std::vector<std::string> links_video {};
 
@@ -486,7 +507,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 
                 constexpr auto busqueda_3 { ctre::search<"v\\\\\":\\\\\".+?\\\\\"\\}\\}"> };
 
-                std::string p3 { busqueda_3(resultado).to_string() }; 
+                std::string p3 { busqueda_3(resultado).to_string() };
                 if (p3.empty()) continue;
                 p3 = std::regex_replace(p3, std::regex{"v\\\\\":\\\\\""}, "");
                 p3 = std::regex_replace(p3, std::regex{"\\\\\"\\}\\}"}, "");
@@ -513,13 +534,33 @@ int exec_anies_cli(const std::vector<std::string>& args) {
     return proc.exit_code();
 }
 
+void limpiar_consola() {
+#if defined(__linux__)
+    std::cout<< "\033[2J\033[1;1H" << std::flush;
+#elif defined(_WIN32)
+    clrscr();
+#endif
+}
+
 void reproducir(const std::vector<std::string>& links_video_episodio) {
+
+    if (links_video_episodio.empty()) {
+        std::cout << "Los servidores fuente existen pero no se encontraron videos válidos.\n";
+        exit(EXIT_FAILURE);
+    }
+
+    limpiar_consola();
+
+    if (TOTAL_EPISODIOS_ANIME == 1) std::cout << "\n=== Reproduciendo " << TITULO_SELECCIONADO << " ===\n";
+    else std::cout << "\n=== Reproduciendo episodio " << EPISODIO << " de " << TITULO_SELECCIONADO << " ===\n";
+
+    int ultimo_exit_code { 1 };
 
     for (const auto& link: links_video_episodio) {
         if (link.contains("player.zilla")) { // HLS
             using namespace std::string_literals;
-            
-            int exit_code { 
+
+            int exit_code {
                 exec_anies_cli({
                     link,
                     "--window-maximized",
@@ -541,6 +582,8 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
                 })
             };
 
+            ultimo_exit_code = exit_code;
+
             if (exit_code) continue;
             else break;
         }
@@ -548,8 +591,71 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
         if (link.contains("uns.bio")) { // UPNShare
             int exit_code { exec_anies_cli({link, "--window-maximized", "--no-terminal"}) };
 
+            ultimo_exit_code = exit_code;
+
             if (exit_code) continue;
             else break;
         }
     }
+
+    if (ultimo_exit_code) {
+        std::cout << "\nHubo un problema al reproducir el video del episodio.\n";
+        exit(EXIT_FAILURE);
+    }
+}
+
+char controlar_opciones_reproduccion() {
+
+    constexpr auto match_opciones_general { ctre::match<"^[asrz]$"> };
+    constexpr auto match_opciones_min_episodio { ctre::match<"^[srz]$"> };
+    constexpr auto match_opciones_max_episodio { ctre::match<"^[arz]$"> };
+
+    char opcion { 'n' };
+
+    while (opcion == 'n') {
+        std::cout << '\n';
+        if (EPISODIO > 1) std::cout << "(a) Reproducir episodio anterior\n";
+        if (EPISODIO < TOTAL_EPISODIOS_ANIME) std::cout << "(s) Reproducir siguiente episodio\n";
+        std::cout << "(r) Repetir episodio\n";
+        std::cout << "(z) Salir\n";
+
+        std::cout << "Selecciona una opción: "; std::cin >> opcion;
+
+        if (EPISODIO == 1 && EPISODIO == TOTAL_EPISODIOS_ANIME) {
+            if (!match_opciones_min_episodio(std::string{opcion})) {
+                limpiar_consola();
+                std::cout << "\n=== Reproducción actual: " << TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\nPor favor ingresa una opción válida.\n";
+                opcion = 'n';
+            }
+        } else if (EPISODIO == 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
+            if (!match_opciones_min_episodio(std::string{opcion})) {
+                limpiar_consola();
+                std::cout << "\n=== Reproducción actual: Episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\nPor favor ingresa una opción válida.\n";
+                opcion = 'n';
+            }
+        } else if (EPISODIO > 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
+            if (!match_opciones_general(std::string{opcion})) {
+                limpiar_consola();
+                std::cout << "\n=== Reproducción actual: Episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\nPor favor ingresa una opción válida.\n";
+                opcion = 'n';
+            }
+        } else if (EPISODIO == TOTAL_EPISODIOS_ANIME) {
+            if (!match_opciones_max_episodio(std::string{opcion})) {
+                limpiar_consola();
+                std::cout << "\n=== Reproducción actual: Episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\nPor favor ingresa una opción válida.\n";
+                opcion = 'n';
+            }
+        }
+    }
+
+    switch (opcion) {
+        case 'a': EPISODIO -= 1; break;
+        case 's': EPISODIO += 1; break;
+    }
+
+    return opcion;
 }
