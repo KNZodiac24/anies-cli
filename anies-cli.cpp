@@ -1,5 +1,5 @@
 /*
- *  anies-cli: Aplicación de consola para ver anime en español
+ *  anies-cli: Aplicación de consola multiplataforma para ver anime en español
  *  Copyright (C) 2024, 2026 KNZodiac24
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -40,8 +40,8 @@
 //////// Preliminares ////////
 
 void mostrar_ayuda() {
-    std::cout << R"(
-anies-cli [OPCIONES] [BÚSQUEDA]
+    std::cout << 
+R"(anies-cli [OPCIONES] [BÚSQUEDA]
 
     OPCIONES:
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
@@ -77,7 +77,7 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
 
 std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links);
 
-int exec_anies_cli(const std::vector<std::string>& args);
+int exec_reproductor(const std::vector<std::string>& args);
 
 void limpiar_consola();
 
@@ -87,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "0.10.6" };
+constexpr std::string VERSION_PROGRAMA { "0.10.7" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -474,7 +474,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
                 const std::string id { link.substr(link.find('#')+1, link.size()-1) };
                 const std::string hex { consultar_sitio("https://animeav1.uns.bio/api/v1/video?id="+id, {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}) };
 
-                constexpr auto match_hex { ctre::match<"^[0-9a-f]+$"> };
+                constexpr auto match_hex { ctre::match<"^[0-9a-f]+\n$"> };
                 if (!match_hex(hex)) continue;
 
                 const std::vector<unsigned char> cifrado { Botan::hex_decode(hex) };
@@ -521,7 +521,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
     return links_video;
 }
 
-int exec_anies_cli(const std::vector<std::string>& args) {
+int exec_reproductor(const std::vector<std::string>& args) {
     namespace bp = boost::process::v2;
     namespace asio = boost::asio;
 
@@ -570,7 +570,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             using namespace std::string_literals;
 
             int exit_code {
-                exec_anies_cli({
+                exec_reproductor({
                     link,
                     "--window-maximized",
                     "--no-terminal",
@@ -598,7 +598,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
         }
 
         if (link.contains("uns.bio")) { // UPNShare
-            int exit_code { exec_anies_cli({link, "--window-maximized", "--no-terminal"}) };
+            int exit_code { exec_reproductor({link, "--window-maximized", "--no-terminal"}) };
 
             ultimo_exit_code = exit_code;
 
@@ -608,7 +608,8 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
     }
 
     if (ultimo_exit_code) {
-        std::cout << "\nHubo un problema al reproducir el video del episodio.\n";
+        std::cout << "\nOcurrió un problema al reproducir el video del episodio.\n"
+                  << "Posiblemente hubo un conflicto con el reproductor o el video no está disponible.\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -654,7 +655,7 @@ char controlar_opciones_reproduccion() {
         } else if (EPISODIO == TOTAL_EPISODIOS_ANIME) {
             if (!match_opciones_max_episodio(std::string{opcion})) {
                 limpiar_consola();
-                std::cout << "\n=== Reproducción actual: Episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\n=== Reproducción actual: episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
                 std::cout << "\nPor favor ingresa una opción válida.\n";
                 opcion = 'n';
             }

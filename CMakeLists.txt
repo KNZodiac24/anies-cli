@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 0.10.6 LANGUAGES CXX)
+project(anies-cli VERSION 0.10.7 LANGUAGES CXX)
 
 add_compile_options(
     "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."
@@ -73,4 +73,4 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -static-libgcc
     -static-libstdc++
 )
-ENDIF()
+endif()
