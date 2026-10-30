@@ -34,7 +34,7 @@
 #include <boost/process.hpp>
 #include <boost/asio.hpp>
 #if defined(_WIN32)
-#include <conio.h>
+#include <windows.h>
 #endif
 
 //////// Preliminares ////////
@@ -87,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "0.10.4" };
+constexpr std::string VERSION_PROGRAMA { "0.10.6" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -526,9 +526,11 @@ int exec_anies_cli(const std::vector<std::string>& args) {
     namespace asio = boost::asio;
 
     asio::io_context ctx {};
-
+#if defined(__linux__)
     bp::process proc {ctx, "/usr/bin/mpv", args};
-
+#elif defined(_WIN32)
+    bp::process proc {ctx, "C:\\Program Files\\MPV Player\\mpv.exe", args};
+#endif
     proc.wait();
 
     return proc.exit_code();
@@ -538,7 +540,14 @@ void limpiar_consola() {
 #if defined(__linux__)
     std::cout<< "\033[2J\033[1;1H" << std::flush;
 #elif defined(_WIN32)
-    clrscr();
+    HANDLE consola { GetStdHandle(STD_OUTPUT_HANDLE) };
+    CONSOLE_SCREEN_BUFFER_INFO pantalla {};
+    COORD coord {0, 0};
+    DWORD count {}; 
+
+    GetConsoleScreenBufferInfo(consola, &pantalla);
+    FillConsoleOutputCharacter(consola, ' ', static_cast<DWORD>(pantalla.dwSize.X) * static_cast<DWORD>(pantalla.dwSize.Y), coord, &count);
+    SetConsoleCursorPosition(consola, coord);
 #endif
 }
 
@@ -631,14 +640,14 @@ char controlar_opciones_reproduccion() {
         } else if (EPISODIO == 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
             if (!match_opciones_min_episodio(std::string{opcion})) {
                 limpiar_consola();
-                std::cout << "\n=== Reproducción actual: Episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\n=== Reproducción actual: episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
                 std::cout << "\nPor favor ingresa una opción válida.\n";
                 opcion = 'n';
             }
         } else if (EPISODIO > 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
             if (!match_opciones_general(std::string{opcion})) {
                 limpiar_consola();
-                std::cout << "\n=== Reproducción actual: Episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
+                std::cout << "\n=== Reproducción actual: episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
                 std::cout << "\nPor favor ingresa una opción válida.\n";
                 opcion = 'n';
             }
