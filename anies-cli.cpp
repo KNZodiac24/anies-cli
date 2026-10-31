@@ -41,7 +41,9 @@
 
 void mostrar_ayuda() {
     std::cout << 
-R"(anies-cli [OPCIONES] [BÚSQUEDA]
+R"(Aplicación de consola multiplataforma para ver anime en español.
+
+anies-cli [OPCIONES] [BÚSQUEDA]
 
     OPCIONES:
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
@@ -87,7 +89,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "0.10.7" };
+constexpr std::string VERSION_PROGRAMA { "1.0.0" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -536,6 +538,7 @@ int exec_reproductor(const std::vector<std::string>& args) {
     return proc.exit_code();
 }
 
+// De: https://stackoverflow.com/questions/6486289/how-to-clear-the-console-in-c
 void limpiar_consola() {
 #if defined(__linux__)
     std::cout<< "\033[2J\033[1;1H" << std::flush;

@@ -23,9 +23,17 @@ anies-cli [OPCIONES] [BÚSQUEDA]
 
 [Demostración anies-cli](https://github.com/user-attachments/assets/2bf4a309-dfd2-4411-bcc9-af17bbaced64)
 
+#### Características
+
+- La herramienta hace scraping de Animeav1 para obtener la información. De momento se buscan los videos solo de dos servidores de los varios que ofrece la página; para versiones futuras se irán añadiendo más para asegurar lo mejor posible la disponibilidad de reproducción.
+- Se puede especificar un episodio a reproducir en la misma línea de comandos.
+- La búsqueda de un título está limitada a un máximo de 50 resultados.
+- Al finalizar la reproducción de un episodio, se presenta un menú con opciones para controlar la reproducción (según aplique): reproducir el episodio siguiente o anterior, repetir episodio, y salir del programa.
+- El programa está disponible para sistemas Linux y Windows de 64 bits; para MacOS quizás en versionaes futuras.
+
 ## Instalación
 
-Descargar el ejecutable desde las [releases](https://github.com/KNZodiac24/anies-cli/releases) o compilar manualmente el proyecto; y añadir el ejecutable al PATH. En Linux hay que darle permisos de ejecución si descargas desde las releases: `chmod +x ./anies-cli` (o la ruta que corresponda).
+Descargar el ejecutable desde las [releases](https://github.com/KNZodiac24/anies-cli/releases) o compilar manualmente el proyecto; y añadir el ejecutable al PATH. En Linux hay que darle permisos de ejecución si se descarga desde las releases: `chmod +x ./anies-cli` (o la ruta que corresponda).
 
 ## Dependencias
 
@@ -47,6 +55,16 @@ Descargar el ejecutable desde las [releases](https://github.com/KNZodiac24/anies
 > [!NOTE] 
 > Para Windows se puede utilizar el ejecutable `mingw32-make` que también viene incluido en la suite de herramientas de Mingw-w64.
 - Vcpkg [instalado y configurado](https://learn.microsoft.com/vcpkg/get_started/get-started) (seguir las instrucciones solo hasta el primer literal del paso 2); con la variable de entorno `VCPKG_ROOT` definida.
+
+#### Sobre las dependencias de desarrollo
+
+En el vcpkg.json se definen las dependencias que se necesitan para realizar el desarrollo:
+
+- **ctre**: Para la búsqueda y verificación de texto mediante expresiones regulares.
+- **curlpp**: Wrapper de curl para simplificar su uso.
+- **botan**: Para la desencriptación de respuestas a ciertas solicitudes de algunos servers.
+- **boost-process**: Para la ejecución controlada del reproductor.
+- **curl** (solo Windows): Para el acceso a las funcionalidades de libcurl, las cuales utiliza curlpp para funcionar. En Linux se tiene acceso a libcurl al instalar curl.
 
 ### Proceso 
 
