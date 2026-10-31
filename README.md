@@ -29,11 +29,13 @@ anies-cli [OPCIONES] [BÚSQUEDA]
 - Se puede especificar un episodio a reproducir en la misma línea de comandos.
 - La búsqueda de un título está limitada a un máximo de 50 resultados.
 - Al finalizar la reproducción de un episodio, se presenta un menú con opciones para controlar la reproducción (según aplique): reproducir el episodio siguiente o anterior, repetir episodio, y salir del programa.
-- El programa está disponible para sistemas Linux y Windows de 64 bits; para MacOS quizás en versionaes futuras.
+- El programa está disponible para sistemas Linux y Windows de 64 bits; para macOS quizás en versiones futuras.
 
 ## Instalación
 
-Descargar el ejecutable desde las [releases](https://github.com/KNZodiac24/anies-cli/releases) o compilar manualmente el proyecto; y añadir el ejecutable al PATH. En Linux hay que darle permisos de ejecución si se descarga desde las releases: `chmod +x ./anies-cli` (o la ruta que corresponda).
+Descargar el ejecutable desde las [releases](https://github.com/KNZodiac24/anies-cli/releases) o compilar manualmente el proyecto; y añadir el ejecutable al PATH.
+
+En Linux hay que descomprimir el archivo de las releases con `tar -xzvf anies-cli_linux_x86_64.tar.gz`. 
 
 ## Dependencias
 
