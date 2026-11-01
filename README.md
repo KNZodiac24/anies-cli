@@ -63,7 +63,7 @@ En Linux hay que descomprimir el archivo de las releases con `tar -xzvf anies-cl
 En el vcpkg.json se definen las dependencias que se necesitan para realizar el desarrollo:
 
 - **ctre**: Para la búsqueda y verificación de texto mediante expresiones regulares.
-- **curlpp**: Wrapper de curl para simplificar su uso.
+- **curlpp** (definido en CMakeLists): Wrapper de curl para simplificar su uso.
 - **botan**: Para la desencriptación de respuestas a ciertas solicitudes de algunos servers.
 - **boost-process**: Para la ejecución controlada del reproductor.
 - **curl** (solo Windows): Para el acceso a las funcionalidades de libcurl, las cuales utiliza curlpp para funcionar. En Linux se tiene acceso a libcurl al instalar curl.

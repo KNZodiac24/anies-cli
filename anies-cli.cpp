@@ -41,9 +41,7 @@
 
 void mostrar_ayuda() {
     std::cout << 
-R"(Aplicación de consola multiplataforma para ver anime en español.
-
-anies-cli [OPCIONES] [BÚSQUEDA]
+R"(anies-cli [OPCIONES] [BÚSQUEDA]
 
     OPCIONES:
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
@@ -89,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "1.0.0" };
+constexpr std::string VERSION_PROGRAMA { "1.0.3" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -99,6 +97,7 @@ constinit int EPISODIO {};
 int main(int argc, char *argv[]) {
 
     if (argc == 1) {
+        std::cout << "Aplicación de consola multiplataforma para ver anime en español.\n\n";
         mostrar_ayuda();
         exit(EXIT_SUCCESS);
     }
@@ -109,6 +108,7 @@ int main(int argc, char *argv[]) {
     for(std::size_t i {}; i < argumentos.size(); ++i){
         const std::string& op { argumentos[i] };
         if (op == "-h") {
+            std::cout << "Aplicación de consola multiplataforma para ver anime en español.\n\n";
             mostrar_ayuda();
             exit(EXIT_SUCCESS);
         }
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
                 argumentos.erase(std::remove(argumentos.begin(), argumentos.end(), argumentos[i+1]), argumentos.cend());
                 continue;
             } else {
-                std::cerr << "Por favor, especifica el número de episodio correctamente.\n";
+                std::cerr << "Por favor, especifica el número de episodio correctamente.\n\n";
                 mostrar_ayuda();
                 exit(EXIT_FAILURE);
             }
@@ -209,9 +209,9 @@ void validar_titulo_anime() {
         exit(EXIT_FAILURE);
     }
 
-    constexpr auto matcher_caracteres_solos { ctre::match<"^(\\.)+$|^(,)+$|^(!)+$|^(:)+$|^(-)+$|^(`)+$|^(\\[)+$|^(\\])+$|^(\\()+$|^(\\))+$|^(\")+$|^(')+$|^(%2B)+$|^(\\\\)+$|^(/)+$|^(\\e)+$|^(\\n)+$"> };
+    constexpr auto matcher_caracteres_solos_y_al_inicio { ctre::match<"^(\\.).*$|^(,).*$|^(!).*$|^(:).*$|^(-).*$|^(`).*$|^(\\[).*$|^(\\]).*$|^(\\().*$|^(\\)).*$|^(\").*$|^(').*$|^(%2B).*$|^(\\\\).*$|^(/).*$|^(\\e).*$|^(\\n).*$|^%.*$"> };
 
-    if (matcher_caracteres_solos(ANIME) || ANIME.contains("\\\\") || ANIME.contains("/") ||
+    if (matcher_caracteres_solos_y_al_inicio(ANIME) || ANIME.contains("\\\\") || ANIME.contains("/") ||
         ANIME.contains("\\e") || ANIME.contains("\\s") || ANIME.contains("\t") ||
         ANIME.contains("\n") || ANIME.contains("\\")) {
         std::cerr << "Error: El título ingresado no es válido.\n";
@@ -252,8 +252,10 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
         req.perform();
     } catch(const curlpp::RuntimeError& e) {
         std::cout << e.what() << '\n';
+        exit(EXIT_FAILURE);
     } catch(const curlpp::LogicError& e) {
         std::cout << e.what() << '\n';
+        exit(EXIT_FAILURE);
     }
 
     return os.str();
@@ -288,6 +290,16 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
 
         const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
 
+        // Esto es útil más abajo, se hace aquí para no hacerlo en cada iteración
+        std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
+        temp_anime = std::regex_replace(temp_anime, std::regex{"%2B"}, "+");
+        std::transform(
+            temp_anime.begin(),
+            temp_anime.end(),
+            temp_anime.begin(),
+            [](unsigned char c){ return std::tolower(c); }
+        );
+
         for (const auto& resultado: busqueda_resultados_pagina) {
 
             if (numero_resultados_encontrados == 50) {
@@ -307,16 +319,14 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
             const std::string link { r.substr(r.find('%')+1, r.size()-1) };
 
             // Este bloque es solo para añadir una verificación de que lo ingresado por el usuario salga en la búsqueda,
-            // ya que por alguna razón animeav1 suele mostrar resultados que no tienen que ver
+            // ya que por alguna razón animeav1 suele mostrar resultados que no tienen que ver (y a veces no muestra los que sí...)
             std::string temp_titulo { titulo };
             std::transform(
                 temp_titulo.begin(),
                 temp_titulo.end(),
                 temp_titulo.begin(),
                 [](unsigned char c){ return std::tolower(c); }
-            );
-            std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
-            temp_anime = std::regex_replace(temp_anime, std::regex{"%2B"}, "+");
+            ); 
 
             if (!temp_titulo.contains(temp_anime)) continue;
 
@@ -494,22 +504,28 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
                 const std::string resultado { descifrado.begin(), descifrado.end() };
 
                 constexpr auto busqueda_1 { ctre::search<"Tiktok\\\\\".+?disabled.+?domain.+?params"> };
+                const auto r1 { busqueda_1(resultado) };
+                if (!r1) continue;
 
-                std::string p1 { busqueda_1(resultado).to_string() };
+                std::string p1 { r1.to_string() };
                 if (p1.empty()) continue;
                 p1 = std::regex_replace(p1, std::regex{".+domain\\\\\":\\\\\""}, "");
                 p1 = std::regex_replace(p1, std::regex{"\\\\\",\\\\\"params"}, "");
 
                 constexpr auto busqueda_2 { ctre::search<"hls\\\\/.+?m3u8"> };
+                const auto r2 { busqueda_2(resultado) };
+                if (!r2) continue;
 
-                std::string p2 { busqueda_2(resultado).to_string() };
+                std::string p2 { r2.to_string() };
                 if (p2.empty()) continue;
                 p2 = std::regex_replace(p2, std::regex{"hls\\\\/"}, "");
                 p2 = std::regex_replace(p2, std::regex{"\\\\"}, "");
 
                 constexpr auto busqueda_3 { ctre::search<"v\\\\\":\\\\\".+?\\\\\"\\}\\}"> };
+                const auto r3 { busqueda_3(resultado) };
+                if (!r3) continue;
 
-                std::string p3 { busqueda_3(resultado).to_string() };
+                std::string p3 { r3.to_string() };
                 if (p3.empty()) continue;
                 p3 = std::regex_replace(p3, std::regex{"v\\\\\":\\\\\""}, "");
                 p3 = std::regex_replace(p3, std::regex{"\\\\\"\\}\\}"}, "");

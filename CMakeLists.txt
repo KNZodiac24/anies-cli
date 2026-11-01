@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 1.0.0 LANGUAGES CXX)
+project(anies-cli VERSION 1.0.3 LANGUAGES CXX)
 
 add_compile_options(
     "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."
@@ -23,8 +23,8 @@ find_package(ctre CONFIG REQUIRED)
 find_package(botan CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS process)
 if(WIN32)
-find_package(CURL REQUIRED)
-set(WIN_LIBS CURL::libcurl)
+    find_package(CURL REQUIRED)
+    set(WIN_LIBS CURL::libcurl)
 endif()
 
 include(FetchContent)
@@ -69,8 +69,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 if(WIN32)
-target_link_options(${PROJECT_NAME} PRIVATE
-    -static-libgcc
-    -static-libstdc++
-)
+    target_link_options(${PROJECT_NAME} PRIVATE
+        -static-libgcc
+        -static-libstdc++
+    )
 endif()
