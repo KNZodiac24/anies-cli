@@ -67,9 +67,9 @@ void validar_titulo_anime();
 
 std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers = {});
 
-std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
+std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
-void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite);
+void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite, short numero_paginas_omitidas);
 
 void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado);
 
@@ -87,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "1.0.3" };
+constexpr std::string VERSION_PROGRAMA { "1.0.4" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -142,11 +142,11 @@ int main(int argc, char *argv[]) {
 
     const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
 
-    const std::pair<std::unordered_map<std::string, std::string>, bool> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
+    const std::tuple<std::unordered_map<std::string, std::string>, bool, short> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
-    seleccionar_titulo(animes_encontrados.first, animes_encontrados.second);
+    seleccionar_titulo(std::get<0>(animes_encontrados), std::get<1>(animes_encontrados), std::get<2>(animes_encontrados));
 
-    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+animes_encontrados.first.at(TITULO_SELECCIONADO) };
+    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+std::get<0>(animes_encontrados).at(TITULO_SELECCIONADO) };
 
     const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
@@ -261,12 +261,13 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
     return os.str();
 }
 
-std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
+std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
 
     std::unordered_map<std::string, std::string> animes_encontrados {};
     bool resultados_mas_del_limite {};
 
-    int numero_ultima_pagina { 1 };
+    short numero_ultima_pagina { 1 };
+    short numero_paginas_omitidas {};
 
     // Verificar paginación
     if (respuesta_sitio.contains("\">»</a>")) {
@@ -281,6 +282,11 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
         ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"\">"}, "");
         ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"</a><!--]"}, "");
         numero_ultima_pagina = std::stoi(ultimo_resultado);
+
+        if (numero_ultima_pagina > 15) {
+            numero_paginas_omitidas = numero_ultima_pagina - 15;
+            numero_ultima_pagina = 15;
+        }
     }
 
     short numero_resultados_encontrados {};
@@ -341,17 +347,20 @@ std::pair<std::unordered_map<std::string, std::string>, bool> generar_lista_anim
     for (int i { 1 }; i <= numero_ultima_pagina; ++i) {
         if (i == 1) animes_encontrados.merge(extraer_titulo_y_link(respuesta_sitio));
         else {
-            if (resultados_mas_del_limite) break;
+            if (resultados_mas_del_limite) {
+                numero_paginas_omitidas = 0;
+                break;
+            }
             animes_encontrados.merge(
                 extraer_titulo_y_link(consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME+"&page="+std::to_string(i)))
             );
         }
     }
 
-    return std::pair{animes_encontrados, resultados_mas_del_limite};
+    return std::tuple{animes_encontrados, resultados_mas_del_limite, numero_paginas_omitidas};
 }
 
-void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite) {
+void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite, short numero_paginas_omitidas) {
 
     const auto mejorar_presentacion_titulo = [](){
         std::string r { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
@@ -371,7 +380,21 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
         std::cout << indice_resultado << ". " << a.first << '\n';
     }
 
-    if (resultados_mas_del_limite) std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
+    if (resultados_mas_del_limite && numero_paginas_omitidas) {
+        std::cout << "\nSe presentan los primeros 50 resultados";
+        
+        if (numero_paginas_omitidas == 1) std::cout << " y se omitió 1 paǵina de la búsqueda.\n";
+        else std::cout << " y se omitieron " << numero_paginas_omitidas << " páginas de la búsqueda.\n";
+
+        std::cout << "\nRealiza una búsqueda más precisa si no encuentras lo que buscas.";
+    } else if (resultados_mas_del_limite && !numero_paginas_omitidas) {
+        std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
+    } else if (!resultados_mas_del_limite && numero_paginas_omitidas) {
+        if (numero_paginas_omitidas == 1) std::cout << "\nSe omitió 1 paǵina de la búsqueda.";
+        else std::cout << "\nSe omitieron " << numero_paginas_omitidas << " páginas de la búsqueda.";
+
+        std::cout << " Realiza una búsqueda más precisa si no encuentras lo que buscas.";
+    }
 
     int indice_seleccion_titulo {};
     std::string temp_seleccion_titulo {};
