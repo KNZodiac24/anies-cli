@@ -380,17 +380,10 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
         std::cout << indice_resultado << ". " << a.first << '\n';
     }
 
-    if (resultados_mas_del_limite && numero_paginas_omitidas) {
-        std::cout << "\nSe presentan los primeros 50 resultados";
-        
-        if (numero_paginas_omitidas == 1) std::cout << " y se omitió 1 paǵina de la búsqueda.\n";
-        else std::cout << " y se omitieron " << numero_paginas_omitidas << " páginas de la búsqueda.\n";
-
-        std::cout << "\nRealiza una búsqueda más precisa si no encuentras lo que buscas.";
-    } else if (resultados_mas_del_limite && !numero_paginas_omitidas) {
+    if (resultados_mas_del_limite && !numero_paginas_omitidas) {
         std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
     } else if (!resultados_mas_del_limite && numero_paginas_omitidas) {
-        if (numero_paginas_omitidas == 1) std::cout << "\nSe omitió 1 paǵina de la búsqueda.";
+        if (numero_paginas_omitidas == 1) std::cout << "\nSe omitió 1 página de la búsqueda.";
         else std::cout << "\nSe omitieron " << numero_paginas_omitidas << " páginas de la búsqueda.";
 
         std::cout << " Realiza una búsqueda más precisa si no encuentras lo que buscas.";
