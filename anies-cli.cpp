@@ -87,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "1.0.4" };
+constexpr std::string VERSION_PROGRAMA { "1.0.5" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -234,9 +234,17 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
             "priority: u=1, i",
             "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\"",
             "sec-ch-ua-mobile: ?0",
+#if defined(__linux__)
             "sec-ch-ua-platform: \"Linux\"",
+#elif defined(_WIN32)
+            "sec-ch-ua-platform: \"Windows\"",
+#endif
             "sec-gpc: 1",
+#if defined(__linux__)
             "user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#elif defined(_WIN32)
+            "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#endif
         };
         if (otros_headers.size()) {
             for (const auto& h: otros_headers) {
@@ -617,12 +625,20 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
                     "referer: "+link+","+
                     "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\","+
                     "sec-ch-ua-mobile: ?0,"+
+#if defined(__linux__)
                     "sec-ch-ua-platform: \"Linux\","+
+#elif defined(_WIN32)
+                    "sec-ch-ua-platform: \"Windows\","+
+#endif
                     "sec-fetch-dest: video,"+
                     "sec-fetch-mode: cors,"+
                     "sec-fetch-site: same-origin,"+
                     "sec-gpc: 1,"+
+#if defined(__linux__)
                     "user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#elif defined(_WIN32)
+                    "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#endif
                 })
             };
 
