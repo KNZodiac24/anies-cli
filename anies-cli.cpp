@@ -52,7 +52,7 @@ R"(anies-cli [OPCIONES] [BÚSQUEDA]
         anies-cli one piece
         anies-cli naruto -e 10
         anies-cli -e 24 bleach
-        anies-cli jujutsu kaisen -e 9)" << '\n';
+        anies-cli jujutsu -e 9 kaisen)" << '\n';
 }
 
 // De: https://stackoverflow.com/questions/46479513/trim-matching-characters-from-start-or-end-of-string-c
@@ -201,7 +201,7 @@ bool verificar_argumento_numerico(const std::string& arg) {
 void validar_titulo_anime() {
     trim(ANIME, '+', true);
 
-    constexpr auto matcher_espacios { ctre::match<"^[\\h\\s\v\\n\t]+$"> };
+    constexpr auto matcher_espacios { ctre::match<"^[\\h\\s\v\n\t]+$"> };
 
     if (ANIME.empty() || ANIME == "" || matcher_espacios(ANIME)) {
         std::cerr << "Error: No se ha especificado el título a buscar.\n";

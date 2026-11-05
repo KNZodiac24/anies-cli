@@ -17,7 +17,7 @@ anies-cli [OPCIONES] [BÚSQUEDA]
         anies-cli one piece
         anies-cli naruto -e 10
         anies-cli -e 24 bleach
-        anies-cli jujutsu kaisen -e 9
+        anies-cli jujutsu -e 9 kaisen
 ```
 ## Demostración
 
@@ -27,9 +27,9 @@ anies-cli [OPCIONES] [BÚSQUEDA]
 
 - La herramienta hace scraping de Animeav1 para obtener la información. De momento se buscan los videos solo de dos servidores de los varios que ofrece la página; para versiones futuras se irán añadiendo más para asegurar lo mejor posible la disponibilidad de reproducción.
 - Se puede especificar un episodio a reproducir en la misma línea de comandos.
-- La búsqueda de un título está limitada a un máximo de 50 resultados.
+- La búsqueda de un título está limitada a un máximo de 50 resultados. En caso de haber paginación en los resultados del sitio original, se limita a un máximo de 15 paǵinas para no saturar la búsqueda.
 - Al finalizar la reproducción de un episodio, se presenta un menú con opciones para controlar la reproducción (según aplique): reproducir el episodio siguiente o anterior, repetir episodio, y salir del programa.
-- El programa está disponible para sistemas Linux y Windows de 64 bits; para macOS quizás en versiones futuras.
+- El programa está disponible para sistemas Linux y Windows de 64 bits.
 
 ## Instalación
 
