@@ -71,7 +71,7 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
 
 void seleccionar_titulo(const std::unordered_map<std::string, std::string>& animes_encontrados, bool resultados_mas_del_limite, short numero_paginas_omitidas);
 
-void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado);
+void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado);
 
 std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado);
 
@@ -87,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "1.0.5" };
+constexpr std::string VERSION_PROGRAMA { "1.0.6" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -150,7 +150,7 @@ int main(int argc, char *argv[]) {
 
     const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
-    seleccionar_episodio(TITULO_SELECCIONADO, respuesta_titulo_seleccionado);
+    seleccionar_episodio(respuesta_titulo_seleccionado);
 
     char opcion_reproduccion {};
 
@@ -209,11 +209,11 @@ void validar_titulo_anime() {
         exit(EXIT_FAILURE);
     }
 
-    constexpr auto matcher_caracteres_solos_y_al_inicio { ctre::match<"^(\\.).*$|^(,).*$|^(!).*$|^(:).*$|^(-).*$|^(`).*$|^(\\[).*$|^(\\]).*$|^(\\().*$|^(\\)).*$|^(\").*$|^(').*$|^(%2B).*$|^(\\\\).*$|^(/).*$|^(\\e).*$|^(\\n).*$|^%.*$"> };
+    constexpr auto matcher_caracteres_solos_y_al_inicio { ctre::match<"^[\\.,!:;\\-`\\[\\]\\(\\)\"'@#\\*\\?¿¡\\{\\}<>~_´].*$"> };
 
     if (matcher_caracteres_solos_y_al_inicio(ANIME) || ANIME.contains("\\\\") || ANIME.contains("/") ||
-        ANIME.contains("\\e") || ANIME.contains("\\s") || ANIME.contains("\t") ||
-        ANIME.contains("\n") || ANIME.contains("\\")) {
+        ANIME.contains("\\e") || ANIME.contains("\\s") || ANIME.contains("\t") || ANIME.contains("\n") ||
+        ANIME.contains("\\") || ANIME.contains("&") || ANIME.contains("%")) {
         std::cerr << "Error: El título ingresado no es válido.\n";
         exit(EXIT_FAILURE);
     }
@@ -279,11 +279,11 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
 
     // Verificar paginación
     if (respuesta_sitio.contains("\">»</a>")) {
-        const auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!--]">(respuesta_sitio) };
+        constexpr auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!--]"> };
 
         std::string ultimo_resultado {};
 
-        for (const auto& r: busqueda_numero_paginas) {
+        for (const auto& r: busqueda_numero_paginas(respuesta_sitio)) {
             ultimo_resultado = r;
         }
 
@@ -302,7 +302,7 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
     const auto extraer_titulo_y_link = [&resultados_mas_del_limite, &numero_resultados_encontrados](const std::string& pagina_fuente) {
         std::unordered_map<std::string, std::string> titulos_con_links {};
 
-        const auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\"">(pagina_fuente) };
+        constexpr auto busqueda_resultados_pagina { ctre::search_all<"title:\".+?\",synopsis:\".+?\",categoryId:.+?,slug:\".+?\""> };
 
         // Esto es útil más abajo, se hace aquí para no hacerlo en cada iteración
         std::string temp_anime { std::regex_replace(ANIME, std::regex{"\\+"}, " ") };
@@ -314,7 +314,7 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
             [](unsigned char c){ return std::tolower(c); }
         );
 
-        for (const auto& resultado: busqueda_resultados_pagina) {
+        for (const auto& resultado: busqueda_resultados_pagina(pagina_fuente)) {
 
             if (numero_resultados_encontrados == 50) {
                 resultados_mas_del_limite = true;
@@ -421,7 +421,7 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
     }
 }
 
-void seleccionar_episodio(const std::string& titulo_seleccionado, const std::string& respuesta_titulo_seleccionado) {
+void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
 
     constexpr auto busqueda_numero_episodios { ctre::search<"episodesCount:[0-9]+,s"> };
 
@@ -429,27 +429,25 @@ void seleccionar_episodio(const std::string& titulo_seleccionado, const std::str
     r = std::regex_replace(r, std::regex{"episodesCount:"}, "");
     r = std::regex_replace(r, std::regex{",s"}, "");
 
-    int numero_total_episodios { std::stoi(r) };
-
-    TOTAL_EPISODIOS_ANIME = numero_total_episodios;
+    TOTAL_EPISODIOS_ANIME = std::stoi(r);
 
     if (!EPISODIO) {
-        if (numero_total_episodios == 1) {
+        if (TOTAL_EPISODIOS_ANIME == 1) {
             EPISODIO = 1;
             return;
         }
 
         std::string temp_episodio {};
-        std::cout << titulo_seleccionado << " tiene " << numero_total_episodios << " episodios disponibles.\n";
+        std::cout << TITULO_SELECCIONADO << " tiene " << TOTAL_EPISODIOS_ANIME << " episodios disponibles.\n";
         std::cout << "Ingresa el episodio que deseas ver: "; std::cin >> temp_episodio; std::cout << '\n';
 
         if (verificar_argumento_numerico(temp_episodio)) EPISODIO = std::stoi(temp_episodio);
         else exit(EXIT_FAILURE);
     }
 
-    if (EPISODIO > numero_total_episodios) {
+    if (EPISODIO > TOTAL_EPISODIOS_ANIME) {
         std::cerr << "Error: El número de episodio ingresado es mayor al total de disponibles en "
-                  << titulo_seleccionado << " (" << numero_total_episodios << ")\n";
+                  << TITULO_SELECCIONADO << " (" << TOTAL_EPISODIOS_ANIME << ")\n";
         exit(EXIT_FAILURE);
     }
 }
@@ -463,11 +461,11 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
     r = std::regex_replace(r, std::regex{"embeds:.+SUB:\\[\\{"}, "");
     r = std::regex_replace(r, std::regex{"\\}\\]\\},"}, "");
 
-    const auto extraccion_servers_y_links { ctre::search_all<"server:\".+?\",url:\".+?\"">(r) };
+    constexpr auto extraccion_servers_y_links { ctre::search_all<"server:\".+?\",url:\".+?\""> };
 
     std::unordered_map<std::string, std::string> servers_con_links {};
 
-    for (const auto& e: extraccion_servers_y_links) {
+    for (const auto& e: extraccion_servers_y_links(r)) {
         std::string s { e.to_string() };
 
         s = std::regex_replace(s, std::regex{"server:\""}, "");
