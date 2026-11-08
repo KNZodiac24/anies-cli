@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(anies-cli VERSION 1.0.6 LANGUAGES CXX)
+project(anies-cli VERSION 1.0.7 LANGUAGES CXX)
 
 add_compile_options(
     "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."

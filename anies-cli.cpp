@@ -87,7 +87,7 @@ char controlar_opciones_reproduccion();
 
 //////// Main ////////
 
-constexpr std::string VERSION_PROGRAMA { "1.0.6" };
+constexpr std::string VERSION_PROGRAMA { "1.0.7" };
 const std::string SITIO_ANIME { "https://animeav1.com/" };
 constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
@@ -201,19 +201,15 @@ bool verificar_argumento_numerico(const std::string& arg) {
 void validar_titulo_anime() {
     trim(ANIME, '+', true);
 
-    constexpr auto matcher_espacios { ctre::match<"^[\\h\\s\v\n\t]+$"> };
-
-    if (ANIME.empty() || ANIME == "" || matcher_espacios(ANIME)) {
+    if (ANIME.empty()) {
         std::cerr << "Error: No se ha especificado el título a buscar.\n";
         mostrar_ayuda();
         exit(EXIT_FAILURE);
     }
 
-    constexpr auto matcher_caracteres_solos_y_al_inicio { ctre::match<"^[\\.,!:;\\-`\\[\\]\\(\\)\"'@#\\*\\?¿¡\\{\\}<>~_´].*$"> };
+    constexpr auto matcher_cadena_valida { ctre::match<"[a-zA-Z0-9|\\$=]+[a-zA-Z0-9\\.,:!'|\\$\\-\\?\\[\\]\\(\\)\"\\+\Q%2B\E=]*"> };
 
-    if (matcher_caracteres_solos_y_al_inicio(ANIME) || ANIME.contains("\\\\") || ANIME.contains("/") ||
-        ANIME.contains("\\e") || ANIME.contains("\\s") || ANIME.contains("\t") || ANIME.contains("\n") ||
-        ANIME.contains("\\") || ANIME.contains("&") || ANIME.contains("%")) {
+    if (!matcher_cadena_valida(ANIME)) {
         std::cerr << "Error: El título ingresado no es válido.\n";
         exit(EXIT_FAILURE);
     }
@@ -340,7 +336,7 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
                 temp_titulo.end(),
                 temp_titulo.begin(),
                 [](unsigned char c){ return std::tolower(c); }
-            ); 
+            );
 
             if (!temp_titulo.contains(temp_anime)) continue;
 
