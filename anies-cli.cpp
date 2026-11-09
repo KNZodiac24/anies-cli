@@ -132,6 +132,9 @@ int main(int argc, char *argv[]) {
                 ANIME += std::regex_replace(op, std::regex{"\\+"}, "%2B") + '+';
             } else if (op.contains(' ')) {
                 ANIME += std::regex_replace(op, std::regex{" "}, "+");
+            } else if (op.contains('%')) {
+                std::cerr << "Error: El título ingresado no es válido.\n";
+                exit(EXIT_FAILURE);
             } else {
                 ANIME += op + '+';
             }
