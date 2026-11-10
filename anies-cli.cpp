@@ -493,7 +493,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 
     // Se va guardando en el mismo orden preferido de las opciones de reproducción de la página
     for (const auto& server: orden_busqueda) {
-        auto it { servers_con_links.find(server) };
+        const auto& it { servers_con_links.find(server) };
 
         if (it != servers_con_links.cend()) {
             if (it->first == "HLS") {
