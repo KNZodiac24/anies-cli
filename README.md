@@ -44,7 +44,7 @@ anies-cli [OPCIONES] [BÚSQUEDA]
 
 Descargar el ejecutable desde las [releases](https://github.com/KNZodiac24/anies-cli/releases) o compilar manualmente el proyecto; y añadir el ejecutable al PATH.
 
-En Linux hay que descomprimir el archivo de las releases con `tar -xzvf anies-cli_linux_x86_64.tar.gz`. 
+En Linux hay que descomprimir el archivo de las releases con `tar -xzvf anies-cli_x.y.z_linux_x86_64.tar.gz`. 
 
 ## Dependencias
 
