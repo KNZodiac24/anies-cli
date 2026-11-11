@@ -1,11 +1,11 @@
 <div align="center"><h1>anies-cli</h1></div>
 <div align="center">
-    <img src="https://img.shields.io/badge/C++-%2300599C.svg?logo=c%2B%2B&logoColor=white">
-    <img src="https://img.shields.io/badge/CMake-FF6000.svg?logo=cmake&logoColor=white">
-    <img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black">
-    <img src="https://custom-icon-badges.demolab.com/badge/Windows-0078D6?logo=windows11&logoColor=white">
-    <img src="https://img.shields.io/github/license/KNZodiac24/anies-cli?color=blue">
-    <img src="https://img.shields.io/github/v/release/KNZodiac24/anies-cli?color=green">
+    <a href="#"><img src="https://img.shields.io/badge/C++-%2300599C.svg?logo=c%2B%2B&logoColor=white"></a>
+    <a href="#"><img src="https://img.shields.io/badge/CMake-FF6000.svg?logo=cmake&logoColor=white"></a>
+    <a href="#"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black"></a>
+    <a href="#"><img src="https://custom-icon-badges.demolab.com/badge/Windows-0078D6?logo=windows11&logoColor=white"></a>
+    <a href="#"><img src="https://img.shields.io/github/license/KNZodiac24/anies-cli?color=black"></a>
+    <a href="#"><img src="https://img.shields.io/github/v/release/KNZodiac24/anies-cli?color=green"></a>
 </div>
 <div align="center"><h4>Aplicación de consola multiplataforma para ver anime en español.</h4>
 Proyecto inspirado por la excelente herramienta <a href="https://github.com/pystardust/ani-cli">ani-cli</a>.</div>
