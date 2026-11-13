@@ -47,6 +47,7 @@ R"(anies-cli [OPCIONES] [BÚSQUEDA]
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
         -v, --version           Mostrar la versión del programa
         -e <número>             Especificar el número de episodio a reproducir
+        -u                      Verificar si el programa tiene una nueva versión disponible
 
     Ejemplos de uso:
         anies-cli one piece
@@ -62,6 +63,8 @@ void trim(std::string& s, char c, bool reverse = false ) {
 }
 
 bool verificar_argumento_numerico(const std::string& arg);
+
+void verificar_version_disponible();
 
 void validar_titulo_anime();
 
@@ -126,6 +129,10 @@ int main(int argc, char *argv[]) {
                 mostrar_ayuda();
                 exit(EXIT_FAILURE);
             }
+        }
+        else if (op == "-u") {
+            verificar_version_disponible();
+            exit(EXIT_SUCCESS);
         }
         else {
             if (op.contains("+")) {
@@ -199,6 +206,11 @@ bool verificar_argumento_numerico(const std::string& arg) {
     }
 
     return false;
+}
+
+void verificar_version_disponible() {
+    const std::string res { consultar_sitio("https://api.github.com/repos/KNZodiac24/anies-cli/releases/latest") };
+    std::cout << res;
 }
 
 void validar_titulo_anime() {
