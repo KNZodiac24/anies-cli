@@ -209,8 +209,20 @@ bool verificar_argumento_numerico(const std::string& arg) {
 }
 
 void verificar_version_disponible() {
+    constexpr auto busqueda_nombre_version { ctre::search<"\"name\": \"v[0-9]+\\.[0-9]+\\.[0-9]+\""> };
+
     const std::string res { consultar_sitio("https://api.github.com/repos/KNZodiac24/anies-cli/releases/latest") };
-    std::cout << res;
+
+    std::string ultima_version { busqueda_nombre_version(res).to_string() };
+    ultima_version = std::regex_replace(ultima_version, std::regex{"\"name\": \"v"}, "");
+    ultima_version = std::regex_replace(ultima_version, std::regex{"\""}, "");
+
+    if (ultima_version == VERSION_PROGRAMA) {
+        std::cout << "El programa está actualizado.\n";
+    } else {
+        std::cout << "Hay una nueva versión disponible (" << ultima_version << ").\n"
+                  << "Obténla en https://github.com/KNZodiac24/anies-cli/releases/tag/v" << ultima_version << '\n';
+    }
 }
 
 void validar_titulo_anime() {
