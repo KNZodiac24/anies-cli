@@ -160,11 +160,11 @@ int main(int argc, char *argv[]) {
 
     const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
-    seleccionar_episodio(respuesta_titulo_seleccionado);
-
-    char opcion_reproduccion {};
+    char opcion_reproduccion { 'e' };
 
     while (opcion_reproduccion != 'z') {
+        if (opcion_reproduccion == 'e') seleccionar_episodio(respuesta_titulo_seleccionado);
+
         const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
 
         const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
@@ -422,7 +422,7 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
 
     int indice_seleccion_titulo {};
     std::string temp_seleccion_titulo {};
-    std::cout << "\nSelecciona la opción que deseas ver: "; std::cin >> temp_seleccion_titulo; std::cout << '\n';
+    std::cout << "\nSelecciona la opción que deseas ver: "; std::cin >> temp_seleccion_titulo;
 
     if (verificar_argumento_numerico(temp_seleccion_titulo)) indice_seleccion_titulo = std::stoi(temp_seleccion_titulo);
     else exit(EXIT_FAILURE);
@@ -446,13 +446,15 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
 
 void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
 
-    constexpr auto busqueda_numero_episodios { ctre::search<"episodesCount:[0-9]+,s"> };
+    if (!TOTAL_EPISODIOS_ANIME) {
+        constexpr auto busqueda_numero_episodios { ctre::search<"episodesCount:[0-9]+,s"> };
 
-    std::string r { busqueda_numero_episodios(respuesta_titulo_seleccionado).to_string() };
-    r = std::regex_replace(r, std::regex{"episodesCount:"}, "");
-    r = std::regex_replace(r, std::regex{",s"}, "");
+        std::string r { busqueda_numero_episodios(respuesta_titulo_seleccionado).to_string() };
+        r = std::regex_replace(r, std::regex{"episodesCount:"}, "");
+        r = std::regex_replace(r, std::regex{",s"}, "");
 
-    TOTAL_EPISODIOS_ANIME = std::stoi(r);
+        TOTAL_EPISODIOS_ANIME = std::stoi(r);
+    }
 
     if (!EPISODIO) {
         if (TOTAL_EPISODIOS_ANIME == 1) {
@@ -461,7 +463,7 @@ void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
         }
 
         std::string temp_episodio {};
-        std::cout << TITULO_SELECCIONADO << " tiene " << TOTAL_EPISODIOS_ANIME << " episodios disponibles.\n";
+        std::cout << '\n' << TITULO_SELECCIONADO << " tiene " << TOTAL_EPISODIOS_ANIME << " episodios disponibles.\n";
         std::cout << "Ingresa el episodio que deseas ver: "; std::cin >> temp_episodio; std::cout << '\n';
 
         if (verificar_argumento_numerico(temp_episodio)) EPISODIO = std::stoi(temp_episodio);
@@ -688,23 +690,25 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
 
 char controlar_opciones_reproduccion() {
 
-    constexpr auto match_opciones_general { ctre::match<"^[asrz]$"> };
-    constexpr auto match_opciones_min_episodio { ctre::match<"^[srz]$"> };
-    constexpr auto match_opciones_max_episodio { ctre::match<"^[arz]$"> };
+    constexpr auto match_opciones_general { ctre::match<"^[aserz]$"> };
+    constexpr auto match_opciones_unico_episodio { ctre::match<"^[rz]$"> };
+    constexpr auto match_opciones_min_episodio { ctre::match<"^[serz]$"> };
+    constexpr auto match_opciones_max_episodio { ctre::match<"^[aerz]$"> };
 
     char opcion { 'n' };
 
     while (opcion == 'n') {
         std::cout << '\n';
-        if (EPISODIO > 1) std::cout << "(a) Reproducir episodio anterior\n";
-        if (EPISODIO < TOTAL_EPISODIOS_ANIME) std::cout << "(s) Reproducir siguiente episodio\n";
+        if (EPISODIO > 1) std::cout << "(a) Episodio anterior\n";
+        if (EPISODIO < TOTAL_EPISODIOS_ANIME) std::cout << "(s) Siguiente episodio\n";
+        if (TOTAL_EPISODIOS_ANIME > 1) std::cout << "(e) Seleccionar episodio\n";
         std::cout << "(r) Repetir episodio\n";
         std::cout << "(z) Salir\n";
 
         std::cout << "Selecciona una opción: "; std::cin >> opcion;
 
         if (EPISODIO == 1 && EPISODIO == TOTAL_EPISODIOS_ANIME) {
-            if (!match_opciones_min_episodio(std::string{opcion})) {
+            if (!match_opciones_unico_episodio(std::string{opcion})) {
                 limpiar_consola();
                 std::cout << "\n=== Reproducción actual: " << TITULO_SELECCIONADO << " ===\n";
                 std::cout << "\nPor favor ingresa una opción válida.\n";
@@ -737,6 +741,7 @@ char controlar_opciones_reproduccion() {
     switch (opcion) {
         case 'a': EPISODIO -= 1; break;
         case 's': EPISODIO += 1; break;
+        case 'e': EPISODIO = 0; break;
     }
 
     return opcion;
