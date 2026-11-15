@@ -22,6 +22,7 @@ set(WIN_LIBS)
 find_package(ctre CONFIG REQUIRED)
 find_package(botan CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS process)
+find_package(ftxui CONFIG REQUIRED)
 if(WIN32)
     find_package(CURL REQUIRED)
     set(WIN_LIBS CURL::libcurl)
@@ -65,6 +66,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Botan::Botan-static
     botan::botan-static
     Boost::process
+    ftxui::ftxui
     ${WIN_LIBS}
 )
 

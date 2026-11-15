@@ -21,6 +21,10 @@
       "name": "curl",
       "version>=": "8.23.0",
       "platform": "windows"
+    },
+    {
+      "name": "ftxui",
+      "version>=": "7.0.3"
     }
   ],
   "builtin-baseline": "0b88aacde46a853151730fbe7d0b7ee45f4b6864",
@@ -40,6 +44,10 @@
     {
       "name": "curl",
       "version": "8.23.0"
+    },
+    {
+      "name": "ftxui",
+      "version": "7.0.3"
     }
   ]
 }

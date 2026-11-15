@@ -36,6 +36,7 @@
 #if defined(_WIN32)
 #include <windows.h>
 #endif
+#include <ftxui/ftxui.hpp>
 
 //////// Preliminares ////////
 
@@ -96,13 +97,16 @@ constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
 constinit int TOTAL_EPISODIOS_ANIME {};
 constinit int EPISODIO {};
+// Para la reutilización de variables de la TUI
+auto CONSOLA { ftxui::App::TerminalOutput() };
+auto CONTAINER_CONSOLA { ftxui::Container::Vertical({}) };
 
 int main(int argc, char *argv[]) {
 
     if (argc == 1) {
         std::cout << "Aplicación de consola multiplataforma para ver anime en español.\n\n";
         mostrar_ayuda();
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     }
 
     std::vector<std::string> argumentos { argv, argv+argc };
@@ -113,11 +117,11 @@ int main(int argc, char *argv[]) {
         if (op == "-h") {
             std::cout << "Aplicación de consola multiplataforma para ver anime en español.\n\n";
             mostrar_ayuda();
-            exit(EXIT_SUCCESS);
+            return EXIT_SUCCESS;
         }
         else if (op == "-v" || op == "--version") {
             std::cout << VERSION_PROGRAMA << '\n';
-            exit(EXIT_SUCCESS);
+            return EXIT_SUCCESS;
         }
         else if (op == "-e") {
             if (static_cast<int>(i+1) < argc && verificar_argumento_numerico(argumentos[i+1])) {
@@ -127,12 +131,12 @@ int main(int argc, char *argv[]) {
             } else {
                 std::cerr << "Por favor, especifica el número de episodio correctamente.\n\n";
                 mostrar_ayuda();
-                exit(EXIT_FAILURE);
+                return EXIT_FAILURE;
             }
         }
         else if (op == "-u") {
             verificar_version_disponible();
-            exit(EXIT_SUCCESS);
+            return EXIT_SUCCESS;
         }
         else {
             if (op.contains("+")) {
@@ -141,44 +145,49 @@ int main(int argc, char *argv[]) {
                 ANIME += std::regex_replace(op, std::regex{" "}, "+");
             } else if (op.contains('%')) {
                 std::cerr << "Error: El título ingresado no es válido.\n";
-                exit(EXIT_FAILURE);
+                return EXIT_FAILURE;
             } else {
                 ANIME += op + '+';
             }
         }
     }
 
-    validar_titulo_anime();
+    try {
+        validar_titulo_anime();
 
-    const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
+        const std::string respuesta_sitio { consultar_sitio(SITIO_ANIME+"catalogo?search="+ANIME) };
 
-    const std::tuple<std::unordered_map<std::string, std::string>, bool, short> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
+        const std::tuple<std::unordered_map<std::string, std::string>, bool, short> animes_encontrados { generar_lista_animes_encontrados(respuesta_sitio) };
 
-    seleccionar_titulo(std::get<0>(animes_encontrados), std::get<1>(animes_encontrados), std::get<2>(animes_encontrados));
+        seleccionar_titulo(std::get<0>(animes_encontrados), std::get<1>(animes_encontrados), std::get<2>(animes_encontrados));
 
-    const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+std::get<0>(animes_encontrados).at(TITULO_SELECCIONADO) };
+        const std::string link_titulo_seleccionado { SITIO_ANIME+"media/"+std::get<0>(animes_encontrados).at(TITULO_SELECCIONADO) };
 
-    const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
+        const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
-    char opcion_reproduccion { 'e' };
+        char opcion_reproduccion { 'e' };
 
-    while (opcion_reproduccion != 'z') {
-        if (opcion_reproduccion == 'e') seleccionar_episodio(respuesta_titulo_seleccionado);
+        while (opcion_reproduccion != 'z') {
+            if (opcion_reproduccion == 'e') seleccionar_episodio(respuesta_titulo_seleccionado);
 
-        const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
+            const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
 
-        const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
+            const std::string respuesta_episodio_seleccionado { consultar_sitio(link_episodio_seleccionado) };
 
-        const std::unordered_map<std::string, std::string> servers_con_links { generar_servers_con_links(respuesta_episodio_seleccionado) };
+            const std::unordered_map<std::string, std::string> servers_con_links { generar_servers_con_links(respuesta_episodio_seleccionado) };
 
-        const std::vector<std::string> links_video_episodio { obtener_links_video(servers_con_links) };
+            const std::vector<std::string> links_video_episodio { obtener_links_video(servers_con_links) };
 
-        reproducir(links_video_episodio);
+            reproducir(links_video_episodio);
 
-        opcion_reproduccion = controlar_opciones_reproduccion();
+            opcion_reproduccion = controlar_opciones_reproduccion();
+        }
+    } catch(const std::exception& e) {
+        std::cerr << e.what();
+        return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /////// Definiciones ///////
@@ -218,7 +227,7 @@ void verificar_version_disponible() {
     ultima_version = std::regex_replace(ultima_version, std::regex{"\""}, "");
 
     if (ultima_version == VERSION_PROGRAMA) {
-        std::cout << "El programa está actualizado.\n";
+        std::cout << "El programa está actualizado \\(^_^)/\n";
     } else {
         std::cout << "Hay una nueva versión disponible (" << ultima_version << ").\n"
                   << "Obténla en https://github.com/KNZodiac24/anies-cli/releases/tag/v" << ultima_version << '\n';
@@ -229,16 +238,15 @@ void validar_titulo_anime() {
     trim(ANIME, '+', true);
 
     if (ANIME.empty()) {
-        std::cerr << "Error: No se ha especificado el título a buscar.\n";
+        std::cerr << "Error: No se ha especificado el título a buscar.\n\n";
         mostrar_ayuda();
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("");
     }
 
     constexpr auto matcher_cadena_valida { ctre::match<"[a-zA-Z0-9|\\$=]+[a-zA-Z0-9\\.,:!'|\\$\\-\\?\\[\\]\\(\\)\"\\+\Q%2B\E=]*"> };
 
     if (!matcher_cadena_valida(ANIME)) {
-        std::cerr << "Error: El título ingresado no es válido.\n";
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("Error: El título ingresado no es válido.\n");
     }
 }
 
@@ -282,11 +290,9 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
 
         req.perform();
     } catch(const curlpp::RuntimeError& e) {
-        std::cout << e.what() << '\n';
-        exit(EXIT_FAILURE);
+        throw std::runtime_error(std::string{e.what()}+'\n');
     } catch(const curlpp::LogicError& e) {
-        std::cout << e.what() << '\n';
-        exit(EXIT_FAILURE);
+        throw std::runtime_error(std::string{e.what()}+'\n');
     }
 
     return os.str();
@@ -399,49 +405,61 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
     };
 
     if (animes_encontrados.empty()) {
-        std::cout << "No se encontraron resultados para \"" << mejorar_presentacion_titulo() << "\".\n";
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("No se encontraron resultados para \""+mejorar_presentacion_titulo()+"\".\n");
     }
 
-    std::cout << "Resultados para \"" << mejorar_presentacion_titulo() << "\":\n\n";
-
-    int indice_resultado {};
-    for (const auto& a: animes_encontrados) {
-        ++indice_resultado;
-        std::cout << indice_resultado << ". " << a.first << '\n';
-    }
-
-    if (resultados_mas_del_limite && !numero_paginas_omitidas) {
-        std::cout << "\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.";
-    } else if (!resultados_mas_del_limite && numero_paginas_omitidas) {
-        if (numero_paginas_omitidas == 1) std::cout << "\nSe omitió 1 página de la búsqueda.";
-        else std::cout << "\nSe omitieron " << numero_paginas_omitidas << " páginas de la búsqueda.";
-
-        std::cout << " Realiza una búsqueda más precisa si no encuentras lo que buscas.";
-    }
+    limpiar_consola();
 
     int indice_seleccion_titulo {};
-    std::string temp_seleccion_titulo {};
-    std::cout << "\nSelecciona la opción que deseas ver: "; std::cin >> temp_seleccion_titulo;
-
-    if (verificar_argumento_numerico(temp_seleccion_titulo)) indice_seleccion_titulo = std::stoi(temp_seleccion_titulo);
-    else exit(EXIT_FAILURE);
-
-    if (indice_seleccion_titulo > indice_resultado) {
-        std::cerr << "Error: La selección está fuera de los resultados encontrados.\n";
-        exit(EXIT_FAILURE);
-    }
-
-    int indice_helper { 1 };
-
+    std::vector<std::string> titulos_anime {};
     for (const auto& a: animes_encontrados) {
-        if (indice_helper == indice_seleccion_titulo) {
-            TITULO_SELECCIONADO = a.first;
-            break;
-        }else {
-            ++indice_helper;
-        }
+        titulos_anime.emplace_back(a.first);
     }
+
+    const auto mostrar_texto_en_tui = [](const std::string& t){
+        return ftxui::Renderer([t]{ return ftxui::text(t); });
+    }; 
+
+    ftxui::MenuOption opcion {};
+    opcion.on_enter = CONSOLA.ExitLoopClosure();
+
+    CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Resultados para \""+mejorar_presentacion_titulo()+"\":\n"));
+
+    if (resultados_mas_del_limite && !numero_paginas_omitidas) {
+        CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+    } else if (!resultados_mas_del_limite && numero_paginas_omitidas) {
+        if (numero_paginas_omitidas == 1) {
+            CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se omitió 1 página de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+        } else {
+            CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se omitieron "+std::to_string(numero_paginas_omitidas)+" páginas de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+        }
+    } 
+
+    const auto menu { ftxui::Menu(&titulos_anime, &indice_seleccion_titulo, opcion) };
+    const auto menu_renderer = ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame;});
+    CONTAINER_CONSOLA->Add(menu_renderer);
+
+    CONTAINER_CONSOLA->SetActiveChild(CONTAINER_CONSOLA->ChildAt(CONTAINER_CONSOLA->ChildCount()-1));
+
+    bool seleccion_cancelada {};
+    const auto evento_salir_menu = ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](ftxui::Event event) {
+        if (event == ftxui::Event::Character('\033')) {
+            CONSOLA.Exit();
+            seleccion_cancelada = true;
+            return true;
+        }
+        return false;
+    });
+
+    CONSOLA.Loop(evento_salir_menu);
+
+    if (seleccion_cancelada) {
+        throw std::runtime_error("\nSelección de título cancelada. Saliendo del programa.\n");
+    }
+
+    TITULO_SELECCIONADO = titulos_anime.at(static_cast<std::size_t>(indice_seleccion_titulo));
+
+    CONTAINER_CONSOLA->DetachAllChildren();
 }
 
 void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
@@ -467,13 +485,12 @@ void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
         std::cout << "Ingresa el episodio que deseas ver: "; std::cin >> temp_episodio; std::cout << '\n';
 
         if (verificar_argumento_numerico(temp_episodio)) EPISODIO = std::stoi(temp_episodio);
-        else exit(EXIT_FAILURE);
+        else throw std::runtime_error("");
     }
 
     if (EPISODIO > TOTAL_EPISODIOS_ANIME) {
-        std::cerr << "Error: El número de episodio ingresado es mayor al total de disponibles en "
-                  << TITULO_SELECCIONADO << " (" << TOTAL_EPISODIOS_ANIME << ")\n";
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("Error: El número de episodio ingresado es mayor al total de disponibles en "
+                                 +TITULO_SELECCIONADO+" ("+std::to_string(TOTAL_EPISODIOS_ANIME)+")\n");
     }
 }
 
@@ -509,8 +526,7 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
 std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links){
 
     if (servers_con_links.empty()) {
-        std::cout << "El episodio existe pero no se encontraron servidores fuente disponibles.\n";
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("El episodio existe pero no se encontraron servidores fuente disponibles.\n");
     }
 
     std::vector<std::string> links_video {};
@@ -618,23 +634,21 @@ void limpiar_consola() {
 }
 
 void reproducir(const std::vector<std::string>& links_video_episodio) {
+    using namespace std::string_literals;
 
     if (links_video_episodio.empty()) {
-        std::cout << "Los servidores fuente existen pero no se encontraron videos válidos.\n";
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("Los servidores fuente existen pero no se encontraron videos válidos.\n");
     }
 
     limpiar_consola();
 
-    if (TOTAL_EPISODIOS_ANIME == 1) std::cout << "\n=== Reproduciendo " << TITULO_SELECCIONADO << " ===\n";
-    else std::cout << "\n=== Reproduciendo episodio " << EPISODIO << " de " << TITULO_SELECCIONADO << " ===\n";
+    if (TOTAL_EPISODIOS_ANIME == 1) std::cout << "\n𜺀𜺈𜺌𜺎𜺏𜺏 Reproduciendo " << TITULO_SELECCIONADO << " 𜺏𜺏𜺍𜺌𜺄𜺀\n";
+    else std::cout << "\n𜺀𜺈𜺌𜺎𜺏𜺏 Reproduciendo episodio " << EPISODIO << " de " << TITULO_SELECCIONADO << " 𜺏𜺏𜺍𜺌𜺄𜺀\n";
 
     int ultimo_exit_code { 1 };
 
     for (const auto& link: links_video_episodio) {
         if (link.contains("player.zilla")) { // HLS
-            using namespace std::string_literals;
-
             int exit_code {
                 exec_reproductor({
                     link,
@@ -682,9 +696,8 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
     }
 
     if (ultimo_exit_code) {
-        std::cout << "\nOcurrió un problema al reproducir el video del episodio.\n"
-                  << "Posiblemente hubo un conflicto con el reproductor o el video no está disponible.\n";
-        exit(EXIT_FAILURE);
+        throw std::runtime_error("\nOcurrió un problema al reproducir el video del episodio.\n"s
+                                 +"Posiblemente hubo un conflicto con el reproductor o el video no está disponible.\n");
     }
 }
 
