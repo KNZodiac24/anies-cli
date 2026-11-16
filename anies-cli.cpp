@@ -41,7 +41,7 @@
 //////// Preliminares ////////
 
 void mostrar_ayuda() {
-    std::cout << 
+    std::cout <<
 R"(anies-cli [OPCIONES] [BÚSQUEDA]
 
     OPCIONES:
@@ -87,7 +87,15 @@ void limpiar_consola();
 
 void reproducir(const std::vector<std::string>& links_video_episodio);
 
-char controlar_opciones_reproduccion();
+enum class OpcionReproduccion {
+    EPISODIO_ANTERIOR,
+    SIGUIENTE_EPISODIO,
+    SELECCIONAR_EPISODIO,
+    REPETIR_EPISODIO,
+    SALIR
+};
+
+OpcionReproduccion controlar_opciones_reproduccion();
 
 //////// Main ////////
 
@@ -165,10 +173,10 @@ int main(int argc, char *argv[]) {
 
         const std::string respuesta_titulo_seleccionado { consultar_sitio(link_titulo_seleccionado) };
 
-        char opcion_reproduccion { 'e' };
+        auto opcion_reproduccion { OpcionReproduccion::SELECCIONAR_EPISODIO };
 
-        while (opcion_reproduccion != 'z') {
-            if (opcion_reproduccion == 'e') seleccionar_episodio(respuesta_titulo_seleccionado);
+        while (opcion_reproduccion != OpcionReproduccion::SALIR) {
+            if (opcion_reproduccion == OpcionReproduccion::SELECCIONAR_EPISODIO) seleccionar_episodio(respuesta_titulo_seleccionado);
 
             const std::string link_episodio_seleccionado { link_titulo_seleccionado+'/'+std::to_string(EPISODIO) };
 
@@ -186,6 +194,8 @@ int main(int argc, char *argv[]) {
         std::cerr << e.what();
         return EXIT_FAILURE;
     }
+
+    limpiar_consola();
 
     return EXIT_SUCCESS;
 }
@@ -418,10 +428,12 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
 
     const auto mostrar_texto_en_tui = [](const std::string& t){
         return ftxui::Renderer([t]{ return ftxui::text(t); });
-    }; 
+    };
 
-    ftxui::MenuOption opcion {};
-    opcion.on_enter = CONSOLA.ExitLoopClosure();
+    CONSOLA.TrackMouse(false);
+
+    ftxui::MenuOption opcion_menu {};
+    opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
 
     CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Resultados para \""+mejorar_presentacion_titulo()+"\":\n"));
 
@@ -433,9 +445,9 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
         } else {
             CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se omitieron "+std::to_string(numero_paginas_omitidas)+" páginas de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
         }
-    } 
+    }
 
-    const auto menu { ftxui::Menu(&titulos_anime, &indice_seleccion_titulo, opcion) };
+    const auto menu { ftxui::Menu(&titulos_anime, &indice_seleccion_titulo, opcion_menu) };
     const auto menu_renderer = ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame;});
     CONTAINER_CONSOLA->Add(menu_renderer);
 
@@ -453,13 +465,14 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
 
     CONSOLA.Loop(evento_salir_menu);
 
+    CONTAINER_CONSOLA->DetachAllChildren();
+
     if (seleccion_cancelada) {
-        throw std::runtime_error("\nSelección de título cancelada. Saliendo del programa.\n");
+        limpiar_consola();
+        throw std::runtime_error("\nSelección cancelada. Saliendo del programa.\n");
     }
 
     TITULO_SELECCIONADO = titulos_anime.at(static_cast<std::size_t>(indice_seleccion_titulo));
-
-    CONTAINER_CONSOLA->DetachAllChildren();
 }
 
 void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
@@ -625,7 +638,7 @@ void limpiar_consola() {
     HANDLE consola { GetStdHandle(STD_OUTPUT_HANDLE) };
     CONSOLE_SCREEN_BUFFER_INFO pantalla {};
     COORD coord {0, 0};
-    DWORD count {}; 
+    DWORD count {};
 
     GetConsoleScreenBufferInfo(consola, &pantalla);
     FillConsoleOutputCharacter(consola, ' ', static_cast<DWORD>(pantalla.dwSize.X) * static_cast<DWORD>(pantalla.dwSize.Y), coord, &count);
@@ -634,16 +647,29 @@ void limpiar_consola() {
 }
 
 void reproducir(const std::vector<std::string>& links_video_episodio) {
-    using namespace std::string_literals;
 
     if (links_video_episodio.empty()) {
         throw std::runtime_error("Los servidores fuente existen pero no se encontraron videos válidos.\n");
     }
 
+    const auto mostrar_texto_en_tui = [](const std::string& t){
+        return ftxui::Renderer([t]{ return ftxui::text(t); });
+    };
+
     limpiar_consola();
 
-    if (TOTAL_EPISODIOS_ANIME == 1) std::cout << "\n𜺀𜺈𜺌𜺎𜺏𜺏 Reproduciendo " << TITULO_SELECCIONADO << " 𜺏𜺏𜺍𜺌𜺄𜺀\n";
-    else std::cout << "\n𜺀𜺈𜺌𜺎𜺏𜺏 Reproduciendo episodio " << EPISODIO << " de " << TITULO_SELECCIONADO << " 𜺏𜺏𜺍𜺌𜺄𜺀\n";
+    if (TOTAL_EPISODIOS_ANIME == 1) {
+        CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("\n❱❱❱❱❱ Reproduciendo "+TITULO_SELECCIONADO+" ❰❰❰❰❰\n"));
+    } else {
+        CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("\n❱❱❱❱❱ Reproduciendo episodio "+std::to_string(EPISODIO)+" de "+TITULO_SELECCIONADO+" ❰❰❰❰❰\n"));
+    }
+
+    {
+        ftxui::Loop loop { &CONSOLA, CONTAINER_CONSOLA };
+        loop.RunOnce();
+    }
+
+    using namespace std::string_literals;
 
     int ultimo_exit_code { 1 };
 
@@ -701,61 +727,84 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
     }
 }
 
-char controlar_opciones_reproduccion() {
+OpcionReproduccion controlar_opciones_reproduccion() {
 
-    constexpr auto match_opciones_general { ctre::match<"^[aserz]$"> };
-    constexpr auto match_opciones_unico_episodio { ctre::match<"^[rz]$"> };
-    constexpr auto match_opciones_min_episodio { ctre::match<"^[serz]$"> };
-    constexpr auto match_opciones_max_episodio { ctre::match<"^[aerz]$"> };
+    limpiar_consola();
 
-    char opcion { 'n' };
+    int indice_seleccion_opcion {};
+    std::vector<std::string> opciones_reproduccion {};
 
-    while (opcion == 'n') {
-        std::cout << '\n';
-        if (EPISODIO > 1) std::cout << "(a) Episodio anterior\n";
-        if (EPISODIO < TOTAL_EPISODIOS_ANIME) std::cout << "(s) Siguiente episodio\n";
-        if (TOTAL_EPISODIOS_ANIME > 1) std::cout << "(e) Seleccionar episodio\n";
-        std::cout << "(r) Repetir episodio\n";
-        std::cout << "(z) Salir\n";
+    if (EPISODIO > 1) opciones_reproduccion.emplace_back("Episodio anterior");
+    if (EPISODIO < TOTAL_EPISODIOS_ANIME) opciones_reproduccion.emplace_back("Siguiente episodio");
+    if (TOTAL_EPISODIOS_ANIME > 1) opciones_reproduccion.emplace_back("Seleccionar episodio");
+    opciones_reproduccion.emplace_back("Repetir episodio");
+    opciones_reproduccion.emplace_back("Salir");
 
-        std::cout << "Selecciona una opción: "; std::cin >> opcion;
+    ftxui::MenuOption opcion_menu {};
+    opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
 
-        if (EPISODIO == 1 && EPISODIO == TOTAL_EPISODIOS_ANIME) {
-            if (!match_opciones_unico_episodio(std::string{opcion})) {
-                limpiar_consola();
-                std::cout << "\n=== Reproducción actual: " << TITULO_SELECCIONADO << " ===\n";
-                std::cout << "\nPor favor ingresa una opción válida.\n";
-                opcion = 'n';
-            }
-        } else if (EPISODIO == 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
-            if (!match_opciones_min_episodio(std::string{opcion})) {
-                limpiar_consola();
-                std::cout << "\n=== Reproducción actual: episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
-                std::cout << "\nPor favor ingresa una opción válida.\n";
-                opcion = 'n';
-            }
-        } else if (EPISODIO > 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
-            if (!match_opciones_general(std::string{opcion})) {
-                limpiar_consola();
-                std::cout << "\n=== Reproducción actual: episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
-                std::cout << "\nPor favor ingresa una opción válida.\n";
-                opcion = 'n';
-            }
-        } else if (EPISODIO == TOTAL_EPISODIOS_ANIME) {
-            if (!match_opciones_max_episodio(std::string{opcion})) {
-                limpiar_consola();
-                std::cout << "\n=== Reproducción actual: episodio " << EPISODIO << " de "<< TITULO_SELECCIONADO << " ===\n";
-                std::cout << "\nPor favor ingresa una opción válida.\n";
-                opcion = 'n';
-            }
+    const auto menu { ftxui::Menu(&opciones_reproduccion, &indice_seleccion_opcion, opcion_menu) };
+    const auto menu_renderer = ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame;});
+    CONTAINER_CONSOLA->Add(menu_renderer);
+
+    CONTAINER_CONSOLA->SetActiveChild(CONTAINER_CONSOLA->ChildAt(CONTAINER_CONSOLA->ChildCount()-1));
+
+    bool seleccion_cancelada {};
+    const auto evento_salir_menu = ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](ftxui::Event event) {
+        if (event == ftxui::Event::Character('\033')) {
+            CONSOLA.Exit();
+            seleccion_cancelada = true;
+            return true;
+        }
+        return false;
+    });
+
+    CONSOLA.Loop(evento_salir_menu);
+
+    CONTAINER_CONSOLA->DetachAllChildren();
+
+    if (seleccion_cancelada) {
+        limpiar_consola();
+        throw std::runtime_error("\nSelección cancelada. Saliendo del programa.\n");
+    }
+
+    OpcionReproduccion opcion_reproduccion {};
+
+    if (EPISODIO == 1 && EPISODIO == TOTAL_EPISODIOS_ANIME) {
+        switch (indice_seleccion_opcion) {
+            case 0: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::SALIR; break;
+        }
+    } else if (EPISODIO == 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
+        switch (indice_seleccion_opcion) {
+            case 0: opcion_reproduccion = OpcionReproduccion::SIGUIENTE_EPISODIO; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
+            case 2: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 3: opcion_reproduccion = OpcionReproduccion::SALIR; break;
+        }
+    } else if (EPISODIO > 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
+        switch (indice_seleccion_opcion) {
+            case 0: opcion_reproduccion = OpcionReproduccion::EPISODIO_ANTERIOR; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::SIGUIENTE_EPISODIO; break;
+            case 2: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
+            case 3: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 4: opcion_reproduccion = OpcionReproduccion::SALIR; break;
+        }
+    } else if (EPISODIO == TOTAL_EPISODIOS_ANIME) {
+        switch (indice_seleccion_opcion) {
+            case 0: opcion_reproduccion = OpcionReproduccion::EPISODIO_ANTERIOR; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
+            case 2: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 3: opcion_reproduccion = OpcionReproduccion::SALIR; break;
         }
     }
 
-    switch (opcion) {
-        case 'a': EPISODIO -= 1; break;
-        case 's': EPISODIO += 1; break;
-        case 'e': EPISODIO = 0; break;
+    switch (opcion_reproduccion) {
+        case OpcionReproduccion::EPISODIO_ANTERIOR: EPISODIO -= 1; break;
+        case OpcionReproduccion::SIGUIENTE_EPISODIO: EPISODIO += 1; break;
+        case OpcionReproduccion::SELECCIONAR_EPISODIO: EPISODIO = 0; break;
+        default: break;
     }
 
-    return opcion;
+    return opcion_reproduccion;
 }
