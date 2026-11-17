@@ -426,7 +426,7 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
         titulos_anime.emplace_back(a.first);
     }
 
-    const auto mostrar_texto_en_tui = [](const std::string& t){
+    const auto texto_en_tui = [](const std::string& t){
         return ftxui::Renderer([t]{ return ftxui::text(t); });
     };
 
@@ -435,33 +435,33 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
     ftxui::MenuOption opcion_menu {};
     opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
 
-    CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Resultados para \""+mejorar_presentacion_titulo()+"\":\n"));
+    CONTAINER_CONSOLA->Add(texto_en_tui("Resultados para \""+mejorar_presentacion_titulo()+"\":\n"));
 
     if (resultados_mas_del_limite && !numero_paginas_omitidas) {
-        CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+        CONTAINER_CONSOLA->Add(texto_en_tui("Se presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
     } else if (!resultados_mas_del_limite && numero_paginas_omitidas) {
         if (numero_paginas_omitidas == 1) {
-            CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se omitió 1 página de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+            CONTAINER_CONSOLA->Add(texto_en_tui("Se omitió 1 página de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
         } else {
-            CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("Se omitieron "+std::to_string(numero_paginas_omitidas)+" páginas de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+            CONTAINER_CONSOLA->Add(texto_en_tui("Se omitieron "+std::to_string(numero_paginas_omitidas)+" páginas de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
         }
     }
 
     const auto menu { ftxui::Menu(&titulos_anime, &indice_seleccion_titulo, opcion_menu) };
-    const auto menu_renderer = ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame;});
+    const auto menu_renderer { ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame; }) };
     CONTAINER_CONSOLA->Add(menu_renderer);
 
     CONTAINER_CONSOLA->SetActiveChild(CONTAINER_CONSOLA->ChildAt(CONTAINER_CONSOLA->ChildCount()-1));
 
     bool seleccion_cancelada {};
-    const auto evento_salir_menu = ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](ftxui::Event event) {
-        if (event == ftxui::Event::Character('\033')) {
+    const auto evento_salir_menu { ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](const ftxui::Event& evento) {
+        if (evento == ftxui::Event::Character('\033')) {
             CONSOLA.Exit();
             seleccion_cancelada = true;
             return true;
         }
         return false;
-    });
+    }) };
 
     CONSOLA.Loop(evento_salir_menu);
 
@@ -493,17 +493,60 @@ void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
             return;
         }
 
+        limpiar_consola();
+
         std::string temp_episodio {};
-        std::cout << '\n' << TITULO_SELECCIONADO << " tiene " << TOTAL_EPISODIOS_ANIME << " episodios disponibles.\n";
-        std::cout << "Ingresa el episodio que deseas ver: "; std::cin >> temp_episodio; std::cout << '\n';
+        ftxui::InputOption opcion_input {};
+        opcion_input.multiline = false;
+        opcion_input.on_enter = CONSOLA.ExitLoopClosure();
+        opcion_input.transform = [](ftxui::InputState estado) {
+            estado.element |= ftxui::size(ftxui::WIDTH, ftxui::Constraint::EQUAL, 5);
+            estado.element |= ftxui::border;
+            return estado.element;
+        };
+
+        ftxui::Component input_episodio { ftxui::Input(&temp_episodio, opcion_input) };
+        input_episodio |= ftxui::CatchEvent([&](const ftxui::Event& evento) {
+            return evento.is_character() && !std::isdigit(evento.character()[0]);
+        });
+        input_episodio |= ftxui::CatchEvent([&](const ftxui::Event& evento) {
+            return evento.is_character() && temp_episodio.size() > 3;
+        });
+        const auto input_renderer { ftxui::Renderer(input_episodio, [&]{
+            return ftxui::vbox({
+                ftxui::text('\n'+TITULO_SELECCIONADO+" tiene "+std::to_string(TOTAL_EPISODIOS_ANIME)+" episodios disponibles."),
+                ftxui::hbox(ftxui::vcenter(ftxui::text("Ingresa el episodio que deseas ver: ")), ftxui::notflex(input_episodio->Render()))
+            });
+        }) };
+
+        CONTAINER_CONSOLA->Add(input_renderer);
+
+        bool input_cancelado {};
+        const auto evento_salir_input { ftxui::CatchEvent(CONTAINER_CONSOLA, [&input_cancelado](const ftxui::Event& evento) {
+            if (evento == ftxui::Event::Character('\033')) {
+                CONSOLA.Exit();
+                input_cancelado = true;
+                return true;
+            }
+            return false;
+        }) };
+
+        CONSOLA.Loop(evento_salir_input);
+
+        CONTAINER_CONSOLA->DetachAllChildren();
+
+        if (input_cancelado) {
+            limpiar_consola();
+            throw std::runtime_error("\nIngreso de episodio cancelado. Saliendo del programa.\n");
+        }
 
         if (verificar_argumento_numerico(temp_episodio)) EPISODIO = std::stoi(temp_episodio);
         else throw std::runtime_error("");
     }
 
     if (EPISODIO > TOTAL_EPISODIOS_ANIME) {
-        throw std::runtime_error("Error: El número de episodio ingresado es mayor al total de disponibles en "
-                                 +TITULO_SELECCIONADO+" ("+std::to_string(TOTAL_EPISODIOS_ANIME)+")\n");
+        throw std::runtime_error("Error: El número de episodio ingresado es mayor al total de disponibles ("
+                                 +std::to_string(TOTAL_EPISODIOS_ANIME)+") en "+TITULO_SELECCIONADO+'\n');
     }
 }
 
@@ -560,7 +603,10 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
             if (it->first == "UPNShare") {
                 const std::string link { it->second };
                 const std::string id { link.substr(link.find('#')+1, link.size()-1) };
-                const std::string hex { consultar_sitio("https://animeav1.uns.bio/api/v1/video?id="+id, {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}) };
+                const std::string hex { consultar_sitio(
+                    "https://animeav1.uns.bio/api/v1/video?id="+id,
+                    { "referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}
+                ) };
 
                 constexpr auto match_hex { ctre::match<"^[0-9a-f]+\n$"> };
                 if (!match_hex(hex)) continue;
@@ -652,16 +698,16 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
         throw std::runtime_error("Los servidores fuente existen pero no se encontraron videos válidos.\n");
     }
 
-    const auto mostrar_texto_en_tui = [](const std::string& t){
+    const auto texto_en_tui = [](const std::string& t){
         return ftxui::Renderer([t]{ return ftxui::text(t); });
     };
 
     limpiar_consola();
 
     if (TOTAL_EPISODIOS_ANIME == 1) {
-        CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("\n❱❱❱❱❱ Reproduciendo "+TITULO_SELECCIONADO+" ❰❰❰❰❰\n"));
+        CONTAINER_CONSOLA->Add(texto_en_tui("\n❭❭❭❭❭ Reproduciendo "+TITULO_SELECCIONADO+" ❬❬❬❬❬\n"));
     } else {
-        CONTAINER_CONSOLA->Add(mostrar_texto_en_tui("\n❱❱❱❱❱ Reproduciendo episodio "+std::to_string(EPISODIO)+" de "+TITULO_SELECCIONADO+" ❰❰❰❰❰\n"));
+        CONTAINER_CONSOLA->Add(texto_en_tui("\n❭❭❭❭❭ Reproduciendo episodio "+std::to_string(EPISODIO)+" de "+TITULO_SELECCIONADO+" ❬❬❬❬❬\n"));
     }
 
     {
@@ -744,20 +790,20 @@ OpcionReproduccion controlar_opciones_reproduccion() {
     opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
 
     const auto menu { ftxui::Menu(&opciones_reproduccion, &indice_seleccion_opcion, opcion_menu) };
-    const auto menu_renderer = ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame;});
+    const auto menu_renderer { ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame; }) };
     CONTAINER_CONSOLA->Add(menu_renderer);
 
     CONTAINER_CONSOLA->SetActiveChild(CONTAINER_CONSOLA->ChildAt(CONTAINER_CONSOLA->ChildCount()-1));
 
     bool seleccion_cancelada {};
-    const auto evento_salir_menu = ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](ftxui::Event event) {
-        if (event == ftxui::Event::Character('\033')) {
+    const auto evento_salir_menu { ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](const ftxui::Event& evento) {
+        if (evento == ftxui::Event::Character('\033')) {
             CONSOLA.Exit();
             seleccion_cancelada = true;
             return true;
         }
         return false;
-    });
+    }) };
 
     CONSOLA.Loop(evento_salir_menu);
 
