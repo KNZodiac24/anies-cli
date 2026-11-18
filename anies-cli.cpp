@@ -19,6 +19,7 @@
  */
 
 #include <iostream>
+#include <iomanip>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -63,13 +64,34 @@ void trim(std::string& s, char c, bool reverse = false ) {
     else s.erase( 0, s.find_first_not_of( c ) );
 }
 
+// De: https://gist.github.com/arthurafarias/56fec2cd49a32f374c02d1df2b6c350f
+std::string encodeURIComponent(const std::string& decoded) {
+    std::ostringstream oss;
+    constexpr auto regex { ctre::match<"[A-Za-z0-9_\\.!~\\*'\\(\\)\\-]"> };
+
+    for (const char &c: decoded) {
+        if (regex(std::string{c})) {
+            oss << c;
+        } else {
+            oss << "%"
+                << std::uppercase
+                << std::setw(2)
+                << std::setfill('0')
+                << std::hex
+                << static_cast<unsigned char>(c);
+        }
+    }
+
+    return oss.str();
+} // No sé hasta qué punto es necesaria esta función en el lugar que se la usa, pero parece que siempre lo hace; así que por si acaso
+
 bool verificar_argumento_numerico(const std::string& arg);
 
 void verificar_version_disponible();
 
 void validar_titulo_anime();
 
-std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers = {});
+std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers = {}, bool verbose = false);
 
 std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_lista_animes_encontrados(const std::string& respuesta_sitio);
 
@@ -260,8 +282,9 @@ void validar_titulo_anime() {
     }
 }
 
-std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers) {
+std::string consultar_sitio(const std::string& sitio, const std::list<std::string>& otros_headers, bool verbose) {
     std::ostringstream os {};
+    std::string output_verbose {};
     curlpp::options::WriteStream ws{&os};
 
     try {
@@ -298,6 +321,16 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
 
         req.setOpt(ws);
 
+        if (verbose) {
+            req.setOpt<curlpp::options::Verbose>(true);
+            req.setOpt<curlpp::options::DebugFunction>(
+                [&output_verbose](curl_infotype type, char* data, size_t size) {
+                    output_verbose.append(data, size);
+                    return 0;
+                }
+            );
+        }
+
         req.perform();
     } catch(const curlpp::RuntimeError& e) {
         throw std::runtime_error(std::string{e.what()}+'\n');
@@ -305,7 +338,7 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
         throw std::runtime_error(std::string{e.what()}+'\n');
     }
 
-    return os.str();
+    return verbose ? output_verbose : os.str();
 }
 
 std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_lista_animes_encontrados(const std::string& respuesta_sitio) {
@@ -603,56 +636,75 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
             if (it->first == "UPNShare") {
                 const std::string link { it->second };
                 const std::string id { link.substr(link.find('#')+1, link.size()-1) };
-                const std::string hex { consultar_sitio(
-                    "https://animeav1.uns.bio/api/v1/video?id="+id,
-                    { "referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}
-                ) };
 
-                constexpr auto match_hex { ctre::match<"^[0-9a-f]+\n$"> };
+                const std::string res_link_2 { consultar_sitio(
+                    "https://animeav1.uns.bio/api/public/resolve?file1="+encodeURIComponent(id),
+                    {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"}
+                )};
+                constexpr auto busqueda_link_2 { ctre::search<"\"url\":\".+?\",\"host1"> };
+                const auto r_link_2 { busqueda_link_2(res_link_2) };
+                if (!r_link_2) continue;
+
+                std::string link_2 { r_link_2.to_string() };
+                if (link_2.empty()) continue;
+                link_2 = std::regex_replace(link_2, std::regex{"\"url\":\""}, "");
+                link_2 = std::regex_replace(link_2, std::regex{"\",\"host1"}, "");
+
+                const std::string id_2 { std::regex_replace(link_2, std::regex{".+\\.com/"}, "") };
+
+                Botan::secure_vector<unsigned char> buffer_id_2 { id_2.begin(), id_2.end() };
+
+                const auto aes_e { Botan::Cipher_Mode::create_or_throw("AES-128/CBC/PKCS7", Botan::Cipher_Dir::Encryption) };
+                aes_e->set_key(Botan::hex_decode("1d54a1d53c1d56e1d6811d53c1d6831d"));
+                aes_e->start(Botan::hex_decode("1f5101f5dd1f5111f6aa1f6e126a1747"));
+                aes_e->finish(buffer_id_2);
+
+                const std::vector<unsigned char> cifrado_id_2 { buffer_id_2.begin(), buffer_id_2.end() };
+                std::string id_3 { Botan::hex_encode(cifrado_id_2) };
+                std::transform(
+                    id_3.begin(),
+                    id_3.end(),
+                    id_3.begin(),
+                    [](unsigned char c){ return std::tolower(c); }
+                );
+
+                const std::string res_hex { consultar_sitio(
+                    "https://turboembed.com/api/stream/tracking?c="+id_3,
+                    {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"},
+                    true
+                )};
+                constexpr auto busqueda_hex { ctre::search<"x\\-tracking: [0-9a-f]+"> };
+                const auto b_hex { busqueda_hex(res_hex) };
+                if (!b_hex) continue;
+
+                std::string hex { b_hex.to_string() };
+                if (hex.empty()) continue;
+                hex = std::regex_replace(hex, std::regex{"x\\-tracking: "}, "");
+                constexpr auto match_hex { ctre::match<"^[0-9a-f]+$"> };
                 if (!match_hex(hex)) continue;
 
-                const std::vector<unsigned char> cifrado { Botan::hex_decode(hex) };
+                const std::vector<unsigned char> cifrado_hex { Botan::hex_decode(hex) };
+                Botan::secure_vector<unsigned char> buffer_hex { cifrado_hex.begin(), cifrado_hex.end() };
 
-                const auto aes { Botan::Cipher_Mode::create_or_throw("AES-128/CBC/PKCS7", Botan::Cipher_Dir::Decryption) };
-                aes->set_key(Botan::hex_decode("6b69656d7469656e6d75613931316361"));
-                aes->start(Botan::hex_decode("313233343536373839306f6975797472"));
+                const auto aes_d { Botan::Cipher_Mode::create_or_throw("AES-128/CBC/PKCS7", Botan::Cipher_Dir::Decryption) };
+                aes_d->set_key(Botan::hex_decode("1d54a1d53c1d56e1d6811d53c1d6831d"));
+                aes_d->start(Botan::hex_decode("1f5101f5dd1f5111f6aa1f6e126a1747"));
+                aes_d->finish(buffer_hex);
 
-                Botan::secure_vector<unsigned char> buffer { cifrado.begin(), cifrado.end() };
+                const std::vector<unsigned char> descifrado_hex { buffer_hex.begin(), buffer_hex.end() };
+                const std::string resultado { descifrado_hex.begin(), descifrado_hex.end() };
 
-                aes->finish(buffer);
+                constexpr auto busqueda_link_final { ctre::search<"\"tiktok\":\".+?\",\"hls\""> };
+                const auto b_link_final { busqueda_link_final(resultado) };
+                if (!b_link_final) continue;
 
-                const std::vector<unsigned char> descifrado { buffer.begin(), buffer.end() };
+                std::string link_final { b_link_final.to_string() };
+                if (link_final.empty()) continue;
+                link_final = std::regex_replace(link_final, std::regex{"\"tiktok\":\""}, "");
+                link_final = std::regex_replace(link_final, std::regex{"\",\"hls\""}, "");
 
-                const std::string resultado { descifrado.begin(), descifrado.end() };
+                links_video.emplace_back(link_final); // Bueno, obtener este estuvo más interesante... (v2.0)
 
-                constexpr auto busqueda_1 { ctre::search<"Tiktok\\\\\".+?disabled.+?domain.+?params"> };
-                const auto r1 { busqueda_1(resultado) };
-                if (!r1) continue;
-
-                std::string p1 { r1.to_string() };
-                if (p1.empty()) continue;
-                p1 = std::regex_replace(p1, std::regex{".+domain\\\\\":\\\\\""}, "");
-                p1 = std::regex_replace(p1, std::regex{"\\\\\",\\\\\"params"}, "");
-
-                constexpr auto busqueda_2 { ctre::search<"hls\\\\/.+?m3u8"> };
-                const auto r2 { busqueda_2(resultado) };
-                if (!r2) continue;
-
-                std::string p2 { r2.to_string() };
-                if (p2.empty()) continue;
-                p2 = std::regex_replace(p2, std::regex{"hls\\\\/"}, "");
-                p2 = std::regex_replace(p2, std::regex{"\\\\"}, "");
-
-                constexpr auto busqueda_3 { ctre::search<"v\\\\\":\\\\\".+?\\\\\"\\}\\}"> };
-                const auto r3 { busqueda_3(resultado) };
-                if (!r3) continue;
-
-                std::string p3 { r3.to_string() };
-                if (p3.empty()) continue;
-                p3 = std::regex_replace(p3, std::regex{"v\\\\\":\\\\\""}, "");
-                p3 = std::regex_replace(p3, std::regex{"\\\\\"\\}\\}"}, "");
-
-                links_video.emplace_back("https://animeav1.uns.bio/hlsmod/"+p1+'/'+p2+"?v="+p3); // Bueno, obtener este estuvo más interesante...
                 continue;
             } // Creo que de momento solo esos 2 bastan
         }
@@ -757,7 +809,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             else break;
         }
 
-        if (link.contains("uns.bio")) { // UPNShare
+        if (link.contains("turboembed.com")) { // UPNShare
             int exit_code { exec_reproductor({link, "--window-maximized", "--no-terminal"}) };
 
             ultimo_exit_code = exit_code;
