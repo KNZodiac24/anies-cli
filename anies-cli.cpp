@@ -750,13 +750,14 @@ void limpiar_consola() {
 #if defined(__linux__)
     std::cout<< "\033[2J\033[1;1H" << std::flush;
 #elif defined(_WIN32)
-    HANDLE consola { GetStdHandle(STD_OUTPUT_HANDLE) };
+    const HANDLE consola { GetStdHandle(STD_OUTPUT_HANDLE) };
     CONSOLE_SCREEN_BUFFER_INFO pantalla {};
-    COORD coord {0, 0};
+    constexpr COORD coord {0, 0};
     DWORD count {};
 
     GetConsoleScreenBufferInfo(consola, &pantalla);
     FillConsoleOutputCharacter(consola, ' ', static_cast<DWORD>(pantalla.dwSize.X) * static_cast<DWORD>(pantalla.dwSize.Y), coord, &count);
+    FillConsoleOutputAttribute(consola, pantalla.wAttributes, static_cast<DWORD>(pantalla.dwSize.X) * static_cast<DWORD>(pantalla.dwSize.Y), coord, &count);
     SetConsoleCursorPosition(consola, coord);
 #endif
 }
