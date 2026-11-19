@@ -47,8 +47,8 @@ R"(anies-cli [OPCIONES] [BÚSQUEDA]
 
     OPCIONES:
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
+        -e <número>             Especificar un número de episodio a reproducir
         -v, --version           Mostrar la versión del programa
-        -e <número>             Especificar el número de episodio a reproducir
         -u                      Verificar si el programa tiene una nueva versión disponible
 
     Ejemplos de uso:
@@ -620,7 +620,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 
     std::vector<std::string> links_video {};
 
-    const std::array<std::string, 2> orden_busqueda { "HLS", "UPNShare" };
+    const std::array<std::string, 3> orden_busqueda { "HLS", "UPNShare", "MP4Upload" };
 
     // Se va guardando en el mismo orden preferido de las opciones de reproducción de la página
     for (const auto& server: orden_busqueda) {
@@ -706,7 +706,24 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
                 links_video.emplace_back(link_final); // Bueno, obtener este estuvo más interesante... (v2.0)
 
                 continue;
-            } // Creo que de momento solo esos 2 bastan
+            }
+
+            if (it->first == "MP4Upload") {
+                const std::string res_link { consultar_sitio(it->second) };
+
+                constexpr auto busqueda_link_2 { ctre::search<"src: \".+?\""> };
+                const auto b_link_2 { busqueda_link_2(res_link) };
+                if (!b_link_2) continue;
+
+                std::string link_final { b_link_2.to_string() };
+                if (link_final.empty()) continue;
+                link_final = std::regex_replace(link_final, std::regex{"src: \""}, "");
+                link_final = std::regex_replace(link_final, std::regex{"\""}, "");
+
+                links_video.emplace_back(link_final);
+
+                continue;
+            }
         }
     }
 
@@ -773,7 +790,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
 
     for (const auto& link: links_video_episodio) {
         if (link.contains("player.zilla")) { // HLS
-            int exit_code {
+            const int exit_code {
                 exec_reproductor({
                     link,
                     "--window-maximized",
@@ -783,7 +800,6 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
                     "cache-control: no-cache,"+
                     "pragma: no-cache,priority: i,"+
                     "range: bytes=0-,"+
-                    "referer: "+link+","+
                     "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\","+
                     "sec-ch-ua-mobile: ?0,"+
 #if defined(__linux__)
@@ -794,11 +810,12 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
                     "sec-fetch-dest: video,"+
                     "sec-fetch-mode: cors,"+
                     "sec-fetch-site: same-origin,"+
-                    "sec-gpc: 1,"+
+                    "sec-gpc: 1",
+                    "--referrer="+link,
 #if defined(__linux__)
-                    "user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+                    "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #elif defined(_WIN32)
-                    "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #endif
                 })
             };
@@ -810,7 +827,29 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
         }
 
         if (link.contains("turboembed.com")) { // UPNShare
-            int exit_code { exec_reproductor({link, "--window-maximized", "--no-terminal"}) };
+            const int exit_code { exec_reproductor({link, "--window-maximized", "--no-terminal"}) };
+
+            ultimo_exit_code = exit_code;
+
+            if (exit_code) continue;
+            else break;
+        }
+
+        if (link.contains("mp4upload.com")) { // MP4Upload
+            const int exit_code {
+                exec_reproductor({
+                    link,
+                    "--window-maximized",
+                    "--no-terminal",
+                    "--http-header-fields=accept: */*",
+                    "--referrer=https://www.mp4upload.com/",
+#if defined(__linux__)
+                    "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#elif defined(_WIN32)
+                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#endif
+                })
+            };
 
             ultimo_exit_code = exit_code;
 
