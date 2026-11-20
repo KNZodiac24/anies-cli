@@ -17,15 +17,17 @@ set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_BUILD_TYPE release)
 set(CMAKE_BUILD_TYPE Release)
 
-set(WIN_LIBS)
+set(ADDITIONAL_LIBS)
 
 find_package(ctre CONFIG REQUIRED)
 find_package(botan CONFIG REQUIRED)
-find_package(Boost REQUIRED COMPONENTS process)
+if(NOT ANDROID)
+    find_package(Boost REQUIRED COMPONENTS process)
+endif()
 find_package(ftxui CONFIG REQUIRED)
-if(WIN32)
+if(WIN32 OR ANDROID)
     find_package(CURL REQUIRED)
-    set(WIN_LIBS CURL::libcurl)
+    set(ADDITIONAL_LIBS CURL::libcurl)
 endif()
 
 include(FetchContent)
@@ -38,12 +40,25 @@ FetchContent_Declare(
 set(CURLPP_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(curlpp)
 
-add_executable(${PROJECT_NAME} anies-cli.cpp)
-target_compile_options(${PROJECT_NAME} PRIVATE
+set(PROJECT_LIBS
+    curlpp_static
+    ctre::ctre
+    Botan::Botan-static
+    botan::botan-static 
+    ftxui::ftxui
+    ${ADDITIONAL_LIBS}
+)
+
+if(NOT ANDROID)
+    list(APPEND PROJECT_LIBS
+        Boost::process
+    )
+endif()
+
+set(COMPILER_FLAGS
     -Wall
     -Wextra
     -Wpedantic
-    -O2
     -Wshadow
     -Wnon-virtual-dtor
     -Wold-style-cast
@@ -52,22 +67,26 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -Woverloaded-virtual
     -Wsign-conversion
     -Wmisleading-indentation
-    -Wduplicated-cond
-    -Wduplicated-branches
-    -Wlogical-op
     -Wnull-dereference
-    -Wuseless-cast
     -Wdouble-promotion
 )
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    list(APPEND COMPILER_FLAGS
+        -Wduplicated-cond
+        -Wduplicated-branches
+        -Wlogical-op
+        -Wuseless-cast
+    )
+endif()
+
+add_executable(${PROJECT_NAME} anies-cli.cpp)
+target_compile_options(${PROJECT_NAME} PRIVATE
+    ${COMPILER_FLAGS}
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    curlpp_static
-    ctre::ctre
-    Botan::Botan-static
-    botan::botan-static
-    Boost::process
-    ftxui::ftxui
-    ${WIN_LIBS}
+    ${PROJECT_LIBS}
 )
 
 if(WIN32)

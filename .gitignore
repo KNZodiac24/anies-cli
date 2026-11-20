@@ -1,7 +1,7 @@
 .clangd/
 compile_commands.json
 
-build/
+build*/
 bin/
 out/
 .cache/

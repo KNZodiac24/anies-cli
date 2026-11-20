@@ -15,12 +15,13 @@
     },
     {
       "name": "boost-process",
-      "version>=": "1.92.0"
+      "version>=": "1.92.0",
+      "platform": "!android"
     },
     {
       "name": "curl",
       "version>=": "8.23.0",
-      "platform": "windows"
+      "platform": "windows | android"
     },
     {
       "name": "ftxui",

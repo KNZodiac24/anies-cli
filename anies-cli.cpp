@@ -32,12 +32,15 @@
 #include <ctre.hpp>
 #include <botan/cipher_mode.h>
 #include <botan/hex.h>
+#if (defined(__linux__) && !defined(__ANDROID__)) || defined(_WIN32)
 #include <boost/process.hpp>
 #include <boost/asio.hpp>
+#endif
 #if defined(_WIN32)
 #include <windows.h>
 #endif
 #include <ftxui/ftxui.hpp>
+#include <unistd.h>
 
 //////// Preliminares ////////
 
@@ -128,7 +131,7 @@ constinit std::string TITULO_SELECCIONADO {};
 constinit int TOTAL_EPISODIOS_ANIME {};
 constinit int EPISODIO {};
 // Para la reutilización de variables de la TUI
-auto CONSOLA { ftxui::App::TerminalOutput() };
+auto CONSOLA { ftxui::App::Fullscreen() };
 auto CONTAINER_CONSOLA { ftxui::Container::Vertical({}) };
 
 int main(int argc, char *argv[]) {
@@ -298,16 +301,20 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
             "priority: u=1, i",
             "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\"",
             "sec-ch-ua-mobile: ?0",
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
             "sec-ch-ua-platform: \"Linux\"",
 #elif defined(_WIN32)
             "sec-ch-ua-platform: \"Windows\"",
+#elif defined(__ANDROID__)
+            "sec-ch-ua-platform: \"Android\"",
 #endif
             "sec-gpc: 1",
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
             "user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #elif defined(_WIN32)
             "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#elif defined(__ANDROID__)
+            "user-agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #endif
         };
         if (otros_headers.size()) {
@@ -318,6 +325,9 @@ std::string consultar_sitio(const std::string& sitio, const std::list<std::strin
 
         req.setOpt<curlpp::options::Url>(sitio);
         req.setOpt<curlpp::options::HttpHeader>(headers);
+#if defined(__ANDROID__)
+        req.setOpt<curlpp::options::CaInfo>("/data/data/com.termux/files/usr/etc/tls/cert.pem");
+#endif
 
         req.setOpt(ws);
 
@@ -351,7 +361,7 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
 
     // Verificar paginación
     if (respuesta_sitio.contains("\">»</a>")) {
-        constexpr auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!--]"> };
+        constexpr auto busqueda_numero_paginas { ctre::search_all<"\">[0-9]+</a><!\\-\\-\\]"> };
 
         std::string ultimo_resultado {};
 
@@ -360,7 +370,7 @@ std::tuple<std::unordered_map<std::string, std::string>, bool, short> generar_li
         }
 
         ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"\">"}, "");
-        ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"</a><!--]"}, "");
+        ultimo_resultado = std::regex_replace(ultimo_resultado, std::regex{"</a><!\\-\\-\\]"}, "");
         numero_ultima_pagina = std::stoi(ultimo_resultado);
 
         if (numero_ultima_pagina > 15) {
@@ -460,7 +470,7 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
     }
 
     const auto texto_en_tui = [](const std::string& t){
-        return ftxui::Renderer([t]{ return ftxui::text(t); });
+        return ftxui::Renderer([t]{ return ftxui::paragraph(t); });
     };
 
     CONSOLA.TrackMouse(false);
@@ -468,17 +478,20 @@ void seleccionar_titulo(const std::unordered_map<std::string, std::string>& anim
     ftxui::MenuOption opcion_menu {};
     opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
 
-    CONTAINER_CONSOLA->Add(texto_en_tui("Resultados para \""+mejorar_presentacion_titulo()+"\":\n"));
+    CONTAINER_CONSOLA->Add(texto_en_tui("Resultados para \""+mejorar_presentacion_titulo()+"\":"));
 
     if (resultados_mas_del_limite && !numero_paginas_omitidas) {
-        CONTAINER_CONSOLA->Add(texto_en_tui("Se presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+        CONTAINER_CONSOLA->Add(texto_en_tui("\nSe presentan los primeros 50 resultados. Realiza una búsqueda más precisa si no encuentras lo que buscas."));
     } else if (!resultados_mas_del_limite && numero_paginas_omitidas) {
         if (numero_paginas_omitidas == 1) {
-            CONTAINER_CONSOLA->Add(texto_en_tui("Se omitió 1 página de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+            CONTAINER_CONSOLA->Add(texto_en_tui("\nSe omitió 1 página de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas."));
         } else {
-            CONTAINER_CONSOLA->Add(texto_en_tui("Se omitieron "+std::to_string(numero_paginas_omitidas)+" páginas de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas.\n"));
+            CONTAINER_CONSOLA->Add(texto_en_tui("\nSe omitieron "+std::to_string(numero_paginas_omitidas)
+                                   +" páginas de la búsqueda. Realiza una búsqueda más precisa si no encuentras lo que buscas."));
         }
     }
+
+    CONTAINER_CONSOLA->Add(ftxui::Renderer([]{ return ftxui::separator(); }));
 
     const auto menu { ftxui::Menu(&titulos_anime, &indice_seleccion_titulo, opcion_menu) };
     const auto menu_renderer { ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame; }) };
@@ -547,8 +560,8 @@ void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
         });
         const auto input_renderer { ftxui::Renderer(input_episodio, [&]{
             return ftxui::vbox({
-                ftxui::text('\n'+TITULO_SELECCIONADO+" tiene "+std::to_string(TOTAL_EPISODIOS_ANIME)+" episodios disponibles."),
-                ftxui::hbox(ftxui::vcenter(ftxui::text("Ingresa el episodio que deseas ver: ")), ftxui::notflex(input_episodio->Render()))
+                ftxui::paragraph('\n'+TITULO_SELECCIONADO+" tiene "+std::to_string(TOTAL_EPISODIOS_ANIME)+" episodios disponibles."),
+                ftxui::hbox(ftxui::vcenter(ftxui::paragraph("Ingresa el episodio que deseas ver: ")), ftxui::notflex(input_episodio->Render()))
             });
         }) };
 
@@ -731,6 +744,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
 }
 
 int exec_reproductor(const std::vector<std::string>& args) {
+#if (defined(__linux__) && !defined(__ANDROID__)) || defined(_WIN32)
     namespace bp = boost::process::v2;
     namespace asio = boost::asio;
 
@@ -743,6 +757,11 @@ int exec_reproductor(const std::vector<std::string>& args) {
     proc.wait();
 
     return proc.exit_code();
+#endif
+#if defined(__ANDROID__)
+    sleep(5);
+    return 0;
+#endif
 }
 
 // De: https://stackoverflow.com/questions/6486289/how-to-clear-the-console-in-c
@@ -769,19 +788,21 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
     }
 
     const auto texto_en_tui = [](const std::string& t){
-        return ftxui::Renderer([t]{ return ftxui::text(t); });
+        return ftxui::Renderer([t]{ return ftxui::paragraph(t); });
     };
 
     limpiar_consola();
 
     if (TOTAL_EPISODIOS_ANIME == 1) {
-        CONTAINER_CONSOLA->Add(texto_en_tui("\n❭❭❭❭❭ Reproduciendo "+TITULO_SELECCIONADO+" ❬❬❬❬❬\n"));
+        CONTAINER_CONSOLA->Add(texto_en_tui("❭❭❭❭❭ Reproduciendo "+TITULO_SELECCIONADO+" ❬❬❬❬❬"));
     } else {
-        CONTAINER_CONSOLA->Add(texto_en_tui("\n❭❭❭❭❭ Reproduciendo episodio "+std::to_string(EPISODIO)+" de "+TITULO_SELECCIONADO+" ❬❬❬❬❬\n"));
+        CONTAINER_CONSOLA->Add(texto_en_tui("❭❭❭❭❭ Reproduciendo episodio "+std::to_string(EPISODIO)+" de "+TITULO_SELECCIONADO+" ❬❬❬❬❬"));
     }
+    CONTAINER_CONSOLA->Add(ftxui::Renderer([]{ return ftxui::separator(); }));
 
     {
-        ftxui::Loop loop { &CONSOLA, CONTAINER_CONSOLA };
+        auto temp_consola { ftxui::App::TerminalOutput() };
+        ftxui::Loop loop { &temp_consola, CONTAINER_CONSOLA };
         loop.RunOnce();
     }
 
@@ -803,20 +824,24 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
                     "range: bytes=0-,"+
                     "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\","+
                     "sec-ch-ua-mobile: ?0,"+
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
                     "sec-ch-ua-platform: \"Linux\","+
 #elif defined(_WIN32)
                     "sec-ch-ua-platform: \"Windows\","+
+#elif defined(__ANDROID__)
+                    "sec-ch-ua-platform: \"Android\","+
 #endif
                     "sec-fetch-dest: video,"+
                     "sec-fetch-mode: cors,"+
                     "sec-fetch-site: same-origin,"+
                     "sec-gpc: 1",
                     "--referrer="+link,
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
                     "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #elif defined(_WIN32)
                     "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#elif defined(__ANDROID__)
+                    "--user-agent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #endif
                 })
             };
@@ -844,10 +869,12 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
                     "--no-terminal",
                     "--http-header-fields=accept: */*",
                     "--referrer=https://www.mp4upload.com/",
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
                     "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #elif defined(_WIN32)
                     "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+#elif defined(__ANDROID__)
+                    "--user-agent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 #endif
                 })
             };
@@ -882,7 +909,7 @@ OpcionReproduccion controlar_opciones_reproduccion() {
     opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
 
     const auto menu { ftxui::Menu(&opciones_reproduccion, &indice_seleccion_opcion, opcion_menu) };
-    const auto menu_renderer { ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::vscroll_indicator | ftxui::frame; }) };
+    const auto menu_renderer { ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::frame; }) };
     CONTAINER_CONSOLA->Add(menu_renderer);
 
     CONTAINER_CONSOLA->SetActiveChild(CONTAINER_CONSOLA->ChildAt(CONTAINER_CONSOLA->ChildCount()-1));
