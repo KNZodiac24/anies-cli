@@ -40,7 +40,11 @@
 #include <windows.h>
 #endif
 #include <ftxui/ftxui.hpp>
+#if defined(__ANDROID__)
+#include <spawn.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 //////// Preliminares ////////
 
@@ -133,6 +137,9 @@ constinit int EPISODIO {};
 // Para la reutilización de variables de la TUI
 auto CONSOLA { ftxui::App::Fullscreen() };
 auto CONTAINER_CONSOLA { ftxui::Container::Vertical({}) };
+#if defined(__ANDROID__) // Para la ejecución del proceso del reproductor
+extern char** environ;
+#endif
 
 int main(int argc, char *argv[]) {
 
@@ -759,8 +766,78 @@ int exec_reproductor(const std::vector<std::string>& args) {
     return proc.exit_code();
 #endif
 #if defined(__ANDROID__)
-    sleep(5);
-    return 0;
+    constexpr const char* ejecutable { "/data/data/com.termux/files/usr/bin/bash" };
+
+    const std::string ruta_archivo_conf { "/storage/emulated/0/Android/media/is.xyz.mpv/" };
+    const std::string archivo_conf { ruta_archivo_conf+"mpv.conf" };
+
+    std::string sub_script_creacion_archivo {};
+
+    if (args.size() > 1) {
+        for (std::size_t i { 1 }; i < args.size(); ++i) {
+            sub_script_creacion_archivo += "echo \""+args[i].substr(2, args[i].size()-1)+"\" >> "+archivo_conf+" && ";
+        }
+    }
+
+    const std::string script {
+        "mkdir -p "+ruta_archivo_conf+" && "+
+        "if [[ -f "+archivo_conf+" ]]; then echo \"\" > "+archivo_conf+"; else touch "+archivo_conf+"; fi && "+
+        sub_script_creacion_archivo+
+        "am start -a android.intent.action.VIEW -t video/any -d "+args[0]+" -p is.xyz.mpv >/dev/null 2>&1"
+    };
+
+    std::vector<std::string> comando_completo {
+        ejecutable,
+        "-c",
+        script
+    };
+
+    std::vector<char*> argv {};
+    argv.reserve(comando_completo.size() + 1);
+
+    for (auto& arg: comando_completo) {
+        argv.emplace_back(arg.data());
+    }
+    argv.emplace_back(nullptr);
+
+    pid_t pid {};
+
+    const int spawn_error {
+        posix_spawn(
+            &pid,
+            ejecutable,
+            nullptr,
+            nullptr,
+            argv.data(),
+            environ
+        )
+    };
+
+    if (spawn_error != 0) {
+        errno = spawn_error;
+        return -1;
+    }
+
+    int estado {};
+    pid_t resultado {};
+
+    do {
+        resultado = waitpid(pid, &estado, 0);
+    } while (resultado == -1 && errno == EINTR);
+
+    if (resultado == -1) {
+        return -1;
+    }
+
+    if (WIFEXITED(estado)) {
+        return WEXITSTATUS(estado);
+    }
+
+    if (WIFSIGNALED(estado)) {
+        return 128 + WTERMSIG(estado);
+    }
+
+    return -1;
 #endif
 }
 
@@ -815,22 +892,27 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             const int exit_code {
                 exec_reproductor({
                     link,
+#if !defined(__ANDROID__)
                     "--window-maximized",
                     "--no-terminal",
+                    "--script-opts=osc-deadzonesize=0",
+#endif
                     "--http-header-fields=accept: */*,"s+
+#if !defined(__ANDROID__)
                     "accept-language: es-419,es;q=0.8,"+
-                    "cache-control: no-cache,"+
                     "pragma: no-cache,priority: i,"+
-                    "range: bytes=0-,"+
                     "sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Brave\";v=\"156\","+
                     "sec-ch-ua-mobile: ?0,"+
+#endif
 #if defined(__linux__) && !defined(__ANDROID__)
                     "sec-ch-ua-platform: \"Linux\","+
 #elif defined(_WIN32)
                     "sec-ch-ua-platform: \"Windows\","+
 #elif defined(__ANDROID__)
-                    "sec-ch-ua-platform: \"Android\","+
+                    "sec-ch-ua-platform: Android,"+
 #endif
+                    "cache-control: no-cache,"+
+                    "range: bytes=0-,"+
                     "sec-fetch-dest: video,"+
                     "sec-fetch-mode: cors,"+
                     "sec-fetch-site: same-origin,"+
@@ -853,7 +935,18 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
         }
 
         if (link.contains("turboembed.com")) { // UPNShare
-            const int exit_code { exec_reproductor({link, "--window-maximized", "--no-terminal"}) };
+            const int exit_code {
+                exec_reproductor({
+#if !defined(__ANDROID__)
+                    link,
+                    "--window-maximized",
+                    "--no-terminal",
+                    "--script-opts=osc-deadzonesize=0"
+#else
+                    link
+#endif
+                })
+            };
 
             ultimo_exit_code = exit_code;
 
@@ -865,8 +958,11 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             const int exit_code {
                 exec_reproductor({
                     link,
+#if !defined(__ANDROID__)
                     "--window-maximized",
                     "--no-terminal",
+                    "--script-opts=osc-deadzonesize=0",
+#endif
                     "--http-header-fields=accept: */*",
                     "--referrer=https://www.mp4upload.com/",
 #if defined(__linux__) && !defined(__ANDROID__)

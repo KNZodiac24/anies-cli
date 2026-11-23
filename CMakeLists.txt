@@ -59,6 +59,7 @@ set(COMPILER_FLAGS
     -Wall
     -Wextra
     -Wpedantic
+    -O2
     -Wshadow
     -Wnon-virtual-dtor
     -Wold-style-cast
