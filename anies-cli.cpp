@@ -110,7 +110,7 @@ std::unordered_map<std::string, std::string> generar_servers_con_links(const std
 
 std::vector<std::string> obtener_links_video(const std::unordered_map<std::string, std::string>& servers_con_links);
 
-int exec_reproductor(const std::vector<std::string>& args);
+int ejecutar_reproductor(const std::vector<std::string>& args);
 
 void limpiar_consola();
 
@@ -693,13 +693,21 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
                     {"referer: https://animeav1.uns.bio/", "sec-fetch-dest: empty", "sec-fetch-mode: cors", "sec-fetch-site: same-origin"},
                     true
                 )};
+#if defined(__ANDROID__)
+                constexpr auto busqueda_hex { ctre::search<"X\\-Tracking: [0-9a-f]+"> };
+#else
                 constexpr auto busqueda_hex { ctre::search<"x\\-tracking: [0-9a-f]+"> };
+#endif
                 const auto b_hex { busqueda_hex(res_hex) };
                 if (!b_hex) continue;
 
                 std::string hex { b_hex.to_string() };
                 if (hex.empty()) continue;
+#if defined(__ANDROID__)
+                hex = std::regex_replace(hex, std::regex{"X\\-Tracking: "}, "");
+#else
                 hex = std::regex_replace(hex, std::regex{"x\\-tracking: "}, "");
+#endif
                 constexpr auto match_hex { ctre::match<"^[0-9a-f]+$"> };
                 if (!match_hex(hex)) continue;
 
@@ -750,7 +758,7 @@ std::vector<std::string> obtener_links_video(const std::unordered_map<std::strin
     return links_video;
 }
 
-int exec_reproductor(const std::vector<std::string>& args) {
+int ejecutar_reproductor(const std::vector<std::string>& args) {
 #if (defined(__linux__) && !defined(__ANDROID__)) || defined(_WIN32)
     namespace bp = boost::process::v2;
     namespace asio = boost::asio;
@@ -858,6 +866,60 @@ void limpiar_consola() {
 #endif
 }
 
+#if defined(__ANDROID__)
+enum class OpcionGestionReproduccion {
+    CERRAR_REPRODUCCION,
+    PROBAR_OTRO_SERVER
+};
+
+OpcionGestionReproduccion gestionar_reproduccion_actual() {
+    limpiar_consola();
+
+    int indice_seleccion_opcion {};
+    const std::vector<std::string> opciones_reproduccion {
+        "Cerrar reproducción actual",
+        "No se reprodujo el video. Probar otro servidor"
+    };
+
+    ftxui::MenuOption opcion_menu {};
+    opcion_menu.on_enter = CONSOLA.ExitLoopClosure();
+
+    const auto menu { ftxui::Menu(&opciones_reproduccion, &indice_seleccion_opcion, opcion_menu) };
+    const auto menu_renderer { ftxui::Renderer(menu, [&]{ return menu->Render() | ftxui::frame; }) };
+    CONTAINER_CONSOLA->Add(menu_renderer);
+
+    CONTAINER_CONSOLA->SetActiveChild(CONTAINER_CONSOLA->ChildAt(CONTAINER_CONSOLA->ChildCount()-1));
+
+    bool seleccion_cancelada {};
+    const auto evento_salir_menu { ftxui::CatchEvent(CONTAINER_CONSOLA, [&seleccion_cancelada](const ftxui::Event& evento) {
+        if (evento == ftxui::Event::Character('\033')) {
+            CONSOLA.Exit();
+            seleccion_cancelada = true;
+            return true;
+        }
+        return false;
+    }) };
+
+    CONSOLA.Loop(evento_salir_menu);
+
+    menu_renderer->Detach();
+
+    if (seleccion_cancelada) {
+        limpiar_consola();
+        throw std::runtime_error("\nSelección cancelada. Saliendo del programa.\n");
+    }
+
+    OpcionGestionReproduccion opcion_reproduccion_actual {};
+
+    switch (indice_seleccion_opcion) {
+        case 0: opcion_reproduccion_actual = OpcionGestionReproduccion::CERRAR_REPRODUCCION; break;
+        case 1: opcion_reproduccion_actual = OpcionGestionReproduccion::PROBAR_OTRO_SERVER; break;
+    }
+
+    return opcion_reproduccion_actual;
+}
+#endif
+
 void reproducir(const std::vector<std::string>& links_video_episodio) {
 
     if (links_video_episodio.empty()) {
@@ -886,11 +948,14 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
     using namespace std::string_literals;
 
     int ultimo_exit_code { 1 };
+#if defined(__ANDROID__)
+    OpcionGestionReproduccion opcion_reproduccion_actual {};
+#endif
 
     for (const auto& link: links_video_episodio) {
         if (link.contains("player.zilla")) { // HLS
             const int exit_code {
-                exec_reproductor({
+                ejecutar_reproductor({
                     link,
 #if !defined(__ANDROID__)
                     "--window-maximized",
@@ -931,12 +996,21 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             ultimo_exit_code = exit_code;
 
             if (exit_code) continue;
+#if !defined(__ANDROID__)
             else break;
+#else
+            else {
+                opcion_reproduccion_actual = gestionar_reproduccion_actual();
+
+                if (opcion_reproduccion_actual == OpcionGestionReproduccion::CERRAR_REPRODUCCION) break;
+                else continue;
+            }
+#endif
         }
 
         if (link.contains("turboembed.com")) { // UPNShare
             const int exit_code {
-                exec_reproductor({
+                ejecutar_reproductor({
 #if !defined(__ANDROID__)
                     link,
                     "--window-maximized",
@@ -951,12 +1025,21 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             ultimo_exit_code = exit_code;
 
             if (exit_code) continue;
+#if !defined(__ANDROID__)
             else break;
+#else
+            else {
+                opcion_reproduccion_actual = gestionar_reproduccion_actual();
+
+                if (opcion_reproduccion_actual == OpcionGestionReproduccion::CERRAR_REPRODUCCION) break;
+                else continue;
+            }
+#endif
         }
 
         if (link.contains("mp4upload.com")) { // MP4Upload
             const int exit_code {
-                exec_reproductor({
+                ejecutar_reproductor({
                     link,
 #if !defined(__ANDROID__)
                     "--window-maximized",
@@ -978,11 +1061,24 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             ultimo_exit_code = exit_code;
 
             if (exit_code) continue;
+#if !defined(__ANDROID__)
             else break;
+#else
+            else {
+                opcion_reproduccion_actual = gestionar_reproduccion_actual();
+
+                if (opcion_reproduccion_actual == OpcionGestionReproduccion::CERRAR_REPRODUCCION) break;
+                else continue;
+            }
+#endif
         }
     }
 
+#if defined(__ANDROID__)
+    if (ultimo_exit_code || opcion_reproduccion_actual == OpcionGestionReproduccion::PROBAR_OTRO_SERVER) {
+#else
     if (ultimo_exit_code) {
+#endif
         throw std::runtime_error("\nOcurrió un problema al reproducir el video del episodio.\n"s
                                  +"Posiblemente hubo un conflicto con el reproductor o el video no está disponible.\n");
     }
