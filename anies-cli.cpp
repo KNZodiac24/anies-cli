@@ -841,10 +841,6 @@ int ejecutar_reproductor(const std::vector<std::string>& args) {
         return WEXITSTATUS(estado);
     }
 
-    if (WIFSIGNALED(estado)) {
-        return 128 + WTERMSIG(estado);
-    }
-
     return -1;
 #endif
 }
@@ -868,7 +864,7 @@ void limpiar_consola() {
 
 #if defined(__ANDROID__)
 enum class OpcionGestionReproduccion {
-    CERRAR_REPRODUCCION,
+    SALIR_REPRODUCCION,
     PROBAR_OTRO_SERVER
 };
 
@@ -877,7 +873,7 @@ OpcionGestionReproduccion gestionar_reproduccion_actual() {
 
     int indice_seleccion_opcion {};
     const std::vector<std::string> opciones_reproduccion {
-        "Cerrar reproducción actual",
+        "Salir de la reproducción actual",
         "No se reprodujo el video. Probar otro servidor"
     };
 
@@ -912,7 +908,7 @@ OpcionGestionReproduccion gestionar_reproduccion_actual() {
     OpcionGestionReproduccion opcion_reproduccion_actual {};
 
     switch (indice_seleccion_opcion) {
-        case 0: opcion_reproduccion_actual = OpcionGestionReproduccion::CERRAR_REPRODUCCION; break;
+        case 0: opcion_reproduccion_actual = OpcionGestionReproduccion::SALIR_REPRODUCCION; break;
         case 1: opcion_reproduccion_actual = OpcionGestionReproduccion::PROBAR_OTRO_SERVER; break;
     }
 
@@ -1002,7 +998,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             else {
                 opcion_reproduccion_actual = gestionar_reproduccion_actual();
 
-                if (opcion_reproduccion_actual == OpcionGestionReproduccion::CERRAR_REPRODUCCION) break;
+                if (opcion_reproduccion_actual == OpcionGestionReproduccion::SALIR_REPRODUCCION) break;
                 else continue;
             }
 #endif
@@ -1031,7 +1027,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             else {
                 opcion_reproduccion_actual = gestionar_reproduccion_actual();
 
-                if (opcion_reproduccion_actual == OpcionGestionReproduccion::CERRAR_REPRODUCCION) break;
+                if (opcion_reproduccion_actual == OpcionGestionReproduccion::SALIR_REPRODUCCION) break;
                 else continue;
             }
 #endif
@@ -1067,7 +1063,7 @@ void reproducir(const std::vector<std::string>& links_video_episodio) {
             else {
                 opcion_reproduccion_actual = gestionar_reproduccion_actual();
 
-                if (opcion_reproduccion_actual == OpcionGestionReproduccion::CERRAR_REPRODUCCION) break;
+                if (opcion_reproduccion_actual == OpcionGestionReproduccion::SALIR_REPRODUCCION) break;
                 else continue;
             }
 #endif
