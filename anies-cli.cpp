@@ -55,14 +55,20 @@ R"(anies-cli [OPCIONES] [BÚSQUEDA]
     OPCIONES:
         Sin argumentos, -h      Mostrar este mensaje de ayuda con las opciones disponibles
         -e <número>             Especificar un número de episodio a reproducir
+        --dub                   Reproducir la versión con doblaje en vez de la subtitulada
         -v, --version           Mostrar la versión del programa
         -u                      Verificar si el programa tiene una nueva versión disponible
 
     Ejemplos de uso:
         anies-cli one piece
         anies-cli naruto -e 10
-        anies-cli -e 24 bleach
-        anies-cli jujutsu -e 9 kaisen)" << '\n';
+        anies-cli -e 24 bleach --dub
+        anies-cli jujutsu -e 9 kaisen
+
+    Notas:
+    - En caso de no existir la versión con doblaje al utilizar --dub, se utilizará la
+      versión subtitulada. De forma similar, cuando no se especifique esta opción, se
+      utilizará la versión con doblaje si no existe la versión subtitulada.)" << '\n';
 }
 
 // De: https://stackoverflow.com/questions/46479513/trim-matching-characters-from-start-or-end-of-string-c
@@ -134,6 +140,7 @@ constinit std::string ANIME {};
 constinit std::string TITULO_SELECCIONADO {};
 constinit int TOTAL_EPISODIOS_ANIME {};
 constinit int EPISODIO {};
+constinit bool USAR_VERSION_DOBLAJE {};
 // Para la reutilización de variables de la TUI
 auto CONSOLA { ftxui::App::Fullscreen() };
 auto CONTAINER_CONSOLA { ftxui::Container::Vertical({}) };
@@ -159,11 +166,11 @@ int main(int argc, char *argv[]) {
             mostrar_ayuda();
             return EXIT_SUCCESS;
         }
-        else if (op == "-v" || op == "--version") {
+        if (op == "-v" || op == "--version") {
             std::cout << VERSION_PROGRAMA << '\n';
             return EXIT_SUCCESS;
         }
-        else if (op == "-e") {
+        if (op == "-e") {
             if (static_cast<int>(i+1) < argc && verificar_argumento_numerico(argumentos[i+1])) {
                 EPISODIO = std::stoi(argumentos[i+1]);
                 argumentos.erase(std::remove(argumentos.begin(), argumentos.end(), argumentos[i+1]), argumentos.cend());
@@ -174,21 +181,23 @@ int main(int argc, char *argv[]) {
                 return EXIT_FAILURE;
             }
         }
-        else if (op == "-u") {
+        if (op == "-u") {
             verificar_version_disponible();
             return EXIT_SUCCESS;
         }
-        else {
-            if (op.contains("+")) {
-                ANIME += std::regex_replace(op, std::regex{"\\+"}, "%2B") + '+';
-            } else if (op.contains(' ')) {
-                ANIME += std::regex_replace(op, std::regex{" "}, "+");
-            } else if (op.contains('%')) {
-                std::cerr << "Error: El título ingresado no es válido.\n";
-                return EXIT_FAILURE;
-            } else {
-                ANIME += op + '+';
-            }
+        if (op == "--dub") {
+            USAR_VERSION_DOBLAJE = true;
+            continue;
+        }
+        if (op.contains("+")) {
+            ANIME += std::regex_replace(op, std::regex{"\\+"}, "%2B") + '+';
+        } else if (op.contains(' ')) {
+            ANIME += std::regex_replace(op, std::regex{" "}, "+");
+        } else if (op.contains('%')) {
+            std::cerr << "Error: El título ingresado no es válido.\n";
+            return EXIT_FAILURE;
+        } else {
+            ANIME += op + '+';
         }
     }
 
@@ -605,21 +614,47 @@ void seleccionar_episodio(const std::string& respuesta_titulo_seleccionado) {
 
 std::unordered_map<std::string, std::string> generar_servers_con_links(const std::string& respuesta_episodio_seleccionado) {
 
-    constexpr auto busqueda_servers_con_links { ctre::search<"embeds:\\{.*SUB:\\[\\{server:\".+\",url:\".+\"\\}\\]\\},"> };
+    std::unordered_map<std::string, std::string> servers_con_links {};
 
-    std::string r { busqueda_servers_con_links(respuesta_episodio_seleccionado).to_string() };
+    constexpr auto busqueda_embeds { ctre::search<"embeds:\\{.+\\}\\]\\},"> };
+    const auto r_busqueda_embeds { busqueda_embeds(respuesta_episodio_seleccionado) };
+    if (!r_busqueda_embeds) return servers_con_links;
 
-    r = std::regex_replace(r, std::regex{"embeds:.+SUB:\\[\\{"}, "");
-    r = std::regex_replace(r, std::regex{"\\}\\]\\},"}, "");
+    const std::string res_busqueda_embeds { r_busqueda_embeds.to_string() };
+    if (res_busqueda_embeds.empty()) return servers_con_links;
+
+    constexpr auto busqueda_servers_con_links_SUB { ctre::search<"SUB:\\[\\{server:\".+?\",url:\".+?\"\\}\\]"> };
+    constexpr auto busqueda_servers_con_links_DUB { ctre::search<"DUB:\\[\\{server:\".+?\",url:\".+?\"\\}\\]"> };
+    const auto r_busqueda_SUB { busqueda_servers_con_links_SUB(res_busqueda_embeds) };
+    const auto r_busqueda_DUB { busqueda_servers_con_links_DUB(res_busqueda_embeds) };
+
+    std::string resultado_final_busqueda {};
+
+    if (!USAR_VERSION_DOBLAJE) {
+        if (r_busqueda_SUB && !r_busqueda_SUB.to_string().empty()) {
+            resultado_final_busqueda = r_busqueda_SUB.to_string();
+        } else if (r_busqueda_DUB && !r_busqueda_DUB.to_string().empty()) {
+            resultado_final_busqueda = r_busqueda_DUB.to_string();
+        } else {
+            return servers_con_links;
+        }
+    } else {
+        if (r_busqueda_DUB && !r_busqueda_DUB.to_string().empty()) {
+            resultado_final_busqueda = r_busqueda_DUB.to_string();
+        } else if (r_busqueda_SUB && !r_busqueda_SUB.to_string().empty()) {
+            resultado_final_busqueda = r_busqueda_SUB.to_string();
+        } else {
+            return servers_con_links;
+        }
+    }
+
+    resultado_final_busqueda = std::regex_replace(resultado_final_busqueda, std::regex{"(SUB|DUB):\\[\\{"}, "");
+    resultado_final_busqueda = std::regex_replace(resultado_final_busqueda, std::regex{"\\}\\]"}, "");
 
     constexpr auto extraccion_servers_y_links { ctre::search_all<"server:\".+?\",url:\".+?\""> };
 
-    std::unordered_map<std::string, std::string> servers_con_links {};
-
-    for (const auto& e: extraccion_servers_y_links(r)) {
-        std::string s { e.to_string() };
-
-        s = std::regex_replace(s, std::regex{"server:\""}, "");
+    for (const auto& e: extraccion_servers_y_links(resultado_final_busqueda)) {
+        std::string s { std::regex_replace(e.to_string(), std::regex{"server:\""}, "") };
         s = std::regex_replace(s, std::regex{"\",url:\""}, "%");
         s = std::regex_replace(s, std::regex{"\""}, "");
 
@@ -1087,8 +1122,8 @@ OpcionReproduccion controlar_opciones_reproduccion() {
     int indice_seleccion_opcion {};
     std::vector<std::string> opciones_reproduccion {};
 
-    if (EPISODIO > 1) opciones_reproduccion.emplace_back("Episodio anterior");
     if (EPISODIO < TOTAL_EPISODIOS_ANIME) opciones_reproduccion.emplace_back("Siguiente episodio");
+    if (EPISODIO > 1) opciones_reproduccion.emplace_back("Episodio anterior");
     if (TOTAL_EPISODIOS_ANIME > 1) opciones_reproduccion.emplace_back("Seleccionar episodio");
     opciones_reproduccion.emplace_back("Repetir episodio");
     opciones_reproduccion.emplace_back("Salir");
@@ -1137,8 +1172,8 @@ OpcionReproduccion controlar_opciones_reproduccion() {
         }
     } else if (EPISODIO > 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
         switch (indice_seleccion_opcion) {
-            case 0: opcion_reproduccion = OpcionReproduccion::EPISODIO_ANTERIOR; break;
-            case 1: opcion_reproduccion = OpcionReproduccion::SIGUIENTE_EPISODIO; break;
+            case 0: opcion_reproduccion = OpcionReproduccion::SIGUIENTE_EPISODIO; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::EPISODIO_ANTERIOR; break;
             case 2: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
             case 3: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
             case 4: opcion_reproduccion = OpcionReproduccion::SALIR; break;
