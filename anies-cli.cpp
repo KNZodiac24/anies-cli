@@ -281,7 +281,30 @@ void verificar_version_disponible() {
         std::cout << "El programa está actualizado \\(^_^)/\n";
     } else {
         std::cout << "Hay una nueva versión disponible (" << ultima_version << ").\n"
-                  << "Obténla en https://github.com/KNZodiac24/anies-cli/releases/tag/v" << ultima_version << '\n';
+                  << "Descargando e instalando la nueva versión...\n";
+#if (defined(__linux__) && !defined(__ANDROID__)) || defined(_WIN32)
+        namespace bp = boost::process::v2;
+        namespace asio = boost::asio;
+        using namespace std::string_literals;
+
+        asio::io_context ctx {};
+#if defined(__linux__)
+        const std::vector<std::string> args {
+            "-c",
+            "curl http://0.0.0.0:8000/anies-cli-prueba.tar.gz -o anies-cli.tar.gz >/dev/null 2>&1 && "s+
+            "ANIES_CLI_PATH_EXE=$(command -v -- anies-cli) && "+
+            "ANIES_CLI_PATH=$(dirname -- $ANIES_CLI_PATH_EXE) && "+
+            "tar -xzf ./anies-cli.tar.gz -C $ANIES_CLI_PATH && "+
+            "rm ./anies-cli.tar.gz && "+
+            "exit 0"
+        };
+        bp::process proc {ctx, "/usr/bin/bash", args};
+#elif defined(_WIN32)
+#endif
+        proc.detach();
+#endif
+#if defined(__ANDROID__)
+#endif
     }
 }
 
@@ -1124,8 +1147,8 @@ OpcionReproduccion controlar_opciones_reproduccion() {
 
     if (EPISODIO < TOTAL_EPISODIOS_ANIME) opciones_reproduccion.emplace_back("Siguiente episodio");
     if (EPISODIO > 1) opciones_reproduccion.emplace_back("Episodio anterior");
-    if (TOTAL_EPISODIOS_ANIME > 1) opciones_reproduccion.emplace_back("Seleccionar episodio");
     opciones_reproduccion.emplace_back("Repetir episodio");
+    if (TOTAL_EPISODIOS_ANIME > 1) opciones_reproduccion.emplace_back("Seleccionar episodio");
     opciones_reproduccion.emplace_back("Salir");
 
     ftxui::MenuOption opcion_menu {};
@@ -1166,23 +1189,23 @@ OpcionReproduccion controlar_opciones_reproduccion() {
     } else if (EPISODIO == 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
         switch (indice_seleccion_opcion) {
             case 0: opcion_reproduccion = OpcionReproduccion::SIGUIENTE_EPISODIO; break;
-            case 1: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
-            case 2: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 2: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
             case 3: opcion_reproduccion = OpcionReproduccion::SALIR; break;
         }
     } else if (EPISODIO > 1 && EPISODIO < TOTAL_EPISODIOS_ANIME) {
         switch (indice_seleccion_opcion) {
             case 0: opcion_reproduccion = OpcionReproduccion::SIGUIENTE_EPISODIO; break;
             case 1: opcion_reproduccion = OpcionReproduccion::EPISODIO_ANTERIOR; break;
-            case 2: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
-            case 3: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 2: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 3: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
             case 4: opcion_reproduccion = OpcionReproduccion::SALIR; break;
         }
     } else if (EPISODIO == TOTAL_EPISODIOS_ANIME) {
         switch (indice_seleccion_opcion) {
             case 0: opcion_reproduccion = OpcionReproduccion::EPISODIO_ANTERIOR; break;
-            case 1: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
-            case 2: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 1: opcion_reproduccion = OpcionReproduccion::REPETIR_EPISODIO; break;
+            case 2: opcion_reproduccion = OpcionReproduccion::SELECCIONAR_EPISODIO; break;
             case 3: opcion_reproduccion = OpcionReproduccion::SALIR; break;
         }
     }
